@@ -3,40 +3,22 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Mail, Lock, AlertCircle } from 'lucide-react'
+import { Mail, Lock } from 'lucide-react'
 import AuthLayout from '@/components/layouts/AuthLayout'
 import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
-import { loginUser, resendVerificationEmail } from '@/lib/supabase/auth'
+import { loginUser } from '@/lib/supabase/auth'
 
 export default function LoginPage() {
   const router = useRouter()
   const [formData, setFormData] = useState({ email: '', password: '' })
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
-  const [needsVerification, setNeedsVerification] = useState(false)
-  const [resendLoading, setResendLoading] = useState(false)
-  const [resendSuccess, setResendSuccess] = useState(false)
 
   const validateEmail = (email) => {
     const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     return regex.test(email)
-  }
-
-  const handleResendEmail = async () => {
-    setResendLoading(true)
-    setResendSuccess(false)
-    
-    const result = await resendVerificationEmail(formData.email)
-    
-    if (result.success) {
-      setResendSuccess(true)
-    } else {
-      setErrors({ general: 'Error al reenviar email. Intenta de nuevo.' })
-    }
-    
-    setResendLoading(false)
   }
 
   const handleSubmit = async (e) => {
@@ -61,19 +43,18 @@ export default function LoginPage() {
     }
 
     setLoading(true)
-    setNeedsVerification(false)
 
     try {
+      // Llamar a la función de login
       const result = await loginUser(formData.email, formData.password)
 
       if (result.success) {
+        // Redirigir según el rol del usuario
         const redirectUrl = getRedirectUrl(result.profile.rol)
+        console.log('🔄 Redirigiendo a:', redirectUrl)
         router.push(redirectUrl)
       } else {
-        // Si necesita verificación, mostrar opción
-        if (result.needsVerification) {
-          setNeedsVerification(true)
-        }
+        // Mostrar error
         setErrors({ general: result.error })
       }
     } catch (error) {
@@ -83,6 +64,7 @@ export default function LoginPage() {
     }
   }
 
+  // Función para determinar la URL según el rol
   const getRedirectUrl = (rol) => {
     switch (rol) {
       case 'admin':
@@ -94,7 +76,7 @@ export default function LoginPage() {
       case 'staff':
         return '/staff/checkin'
       default:
-        return '/cliente/reservas'
+        return '/cliente/reservas' // Por defecto ir a cliente
     }
   }
 
@@ -107,34 +89,9 @@ export default function LoginPage() {
           {errors.general && (
             <div className="p-4 rounded-xl" 
               style={{ background: 'rgba(174, 63, 33, 0.1)', border: '1px solid rgba(174, 63, 33, 0.3)' }}>
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 mt-0.5" style={{ color: '#AE3F21' }} />
-                <div className="flex-1">
-                  <p className="text-sm" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
-                    {errors.general}
-                  </p>
-                  
-                  {/* Botón para reenviar email de verificación */}
-                  {needsVerification && !resendSuccess && (
-                    <button
-                      type="button"
-                      onClick={handleResendEmail}
-                      disabled={resendLoading}
-                      className="mt-3 text-sm font-medium underline hover:no-underline transition-all"
-                      style={{ color: '#AE3F21' }}
-                    >
-                      {resendLoading ? 'Reenviando...' : 'Reenviar email de verificación'}
-                    </button>
-                  )}
-
-                  {/* Mensaje de éxito */}
-                  {resendSuccess && (
-                    <p className="mt-3 text-sm" style={{ color: '#2D5016' }}>
-                      ✓ Email reenviado. Revisa tu bandeja de entrada.
-                    </p>
-                  )}
-                </div>
-              </div>
+              <p className="text-sm" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
+                {errors.general}
+              </p>
             </div>
           )}
           
@@ -189,18 +146,29 @@ export default function LoginPage() {
 
           <div className="pt-3">
             <Button type="submit" loading={loading}>
-              {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+              {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
             </Button>
           </div>
 
-          <div className="text-center pt-2">
-            <p className="text-sm opacity-80" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-              ¿No tienes cuenta?{' '}
-              <Link href="/registro" className="font-semibold transition-colors hover:underline" style={{ color: '#AE3F21' }}>
-                Regístrate aquí
-              </Link>
-            </p>
+          <div className="relative my-8">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t opacity-20" style={{ borderColor: '#9C7A5E' }}></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span 
+                className="px-4 text-sm opacity-60" 
+                style={{ backgroundColor: 'rgba(53, 53, 53, 0.8)', color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}
+              >
+                ¿Primera vez?
+              </span>
+            </div>
           </div>
+
+          <Link href="/registro">
+            <Button variant="secondary" type="button">
+              Crear Cuenta Nueva
+            </Button>
+          </Link>
         </form>
       </Card>
     </AuthLayout>
