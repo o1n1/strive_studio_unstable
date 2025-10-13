@@ -1,11 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 
 export async function GET(request) {
-  const { searchParams } = new URL(request.url)
-  const token_hash = searchParams.get('token_hash')
-  const type = searchParams.get('type')
+  const requestUrl = new URL(request.url)
+  const token_hash = requestUrl.searchParams.get('token_hash')
+  const type = requestUrl.searchParams.get('type')
+
+  console.log('🔵 Endpoint /auth/confirm llamado')
+  console.log('Token hash:', token_hash ? '✅' : '❌')
+  console.log('Type:', type)
 
   if (token_hash && type) {
     const supabase = createClient(
@@ -18,35 +21,24 @@ export async function GET(request) {
       token_hash,
     })
 
-    if (!error && data.session) {
-      // Establecer cookies manualmente para mantener la sesión
-      const cookieStore = await cookies()
-      
-      // Crear las cookies de sesión necesarias
-      cookieStore.set('sb-access-token', data.session.access_token, {
-        path: '/',
-        secure: process.env.NODE_ENV === 'production',
-        httpOnly: true,
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7 // 7 días
-      })
-
-      cookieStore.set('sb-refresh-token', data.session.refresh_token, {
-        path: '/',
-        secure: process.env.NODE_ENV === 'production',
-        httpOnly: true,
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7 // 7 días
-      })
-
-      // Redirigir a verificación exitosa
-      return NextResponse.redirect(new URL('/verificacion-exitosa', request.url))
+    console.log('Verificación OTP:', error ? '❌' : '✅')
+    
+    if (!error) {
+      console.log('✅ Email verificado, redirigiendo...')
+      // Construir URL completa para el redirect
+      const origin = requestUrl.origin
+      const redirectUrl = `${origin}/verificacion-exitosa`
+      console.log('Redirecting to:', redirectUrl)
+      return NextResponse.redirect(redirectUrl)
     } else {
-      // Error en la verificación
-      return NextResponse.redirect(new URL(`/error?message=${error?.message || 'Error en verificación'}`, request.url))
+      console.error('❌ Error verificando OTP:', error)
+      const origin = requestUrl.origin
+      return NextResponse.redirect(`${origin}/?error=${encodeURIComponent(error.message)}`)
     }
   }
 
   // Si no hay token, redirigir al inicio
-  return NextResponse.redirect(new URL('/', request.url))
+  console.log('⚠️ No hay token, redirigiendo al inicio')
+  const origin = requestUrl.origin
+  return NextResponse.redirect(origin)
 }
