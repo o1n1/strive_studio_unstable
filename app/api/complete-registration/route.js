@@ -2,9 +2,12 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 export async function POST(request) {
+  console.log('🔵 Endpoint /api/complete-registration llamado')
+
   try {
     // Validar Content-Type
     if (!request.headers.get('content-type')?.includes('application/json')) {
+      console.error('❌ Content-Type inválido')
       return NextResponse.json(
         { success: false, error: 'Content-Type inválido' },
         { status: 400 }
@@ -12,10 +15,13 @@ export async function POST(request) {
     }
 
     const body = await request.json()
+    console.log('📦 Body recibido:', { ...body, password: '***' })
+
     const { userId, email, nombre, apellidos, telefono, emergenciaNombre, emergenciaTelefono, alergias, lesiones, userAgent } = body
 
     // Validar campos requeridos
     if (!userId || !email || !nombre || !apellidos || !telefono || !emergenciaNombre || !emergenciaTelefono) {
+      console.error('❌ Faltan campos requeridos')
       return NextResponse.json(
         { success: false, error: 'Faltan campos requeridos' },
         { status: 400 }
@@ -25,14 +31,19 @@ export async function POST(request) {
     // Validar formato UUID
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
     if (!uuidRegex.test(userId)) {
+      console.error('❌ userId inválido:', userId)
       return NextResponse.json(
         { success: false, error: 'userId inválido' },
         { status: 400 }
       )
     }
 
-    // Sanitizar strings (prevenir XSS)
+    // Sanitizar strings
     const sanitize = (str) => str.trim().slice(0, 255)
+
+    console.log('🔑 Verificando credenciales...')
+    console.log('URL exists:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
+    console.log('Service Role Key exists:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -45,8 +56,11 @@ export async function POST(request) {
       }
     )
 
+    console.log('✅ Cliente Supabase creado')
+
     // 1. Crear perfil
-    const { error: profileError } = await supabase
+    console.log('📝 Insertando perfil...')
+    const { data: profileData, error: profileError } = await supabase
       .from('profiles')
       .insert({
         id: userId,
@@ -59,10 +73,15 @@ export async function POST(request) {
         require_email_verification: true
       })
 
-    if (profileError) throw profileError
+    if (profileError) {
+      console.error('❌ Error insertando perfil:', profileError)
+      throw profileError
+    }
+    console.log('✅ Perfil insertado')
 
     // 2. Crear datos de salud
-    const { error: healthError } = await supabase
+    console.log('📝 Insertando datos de salud...')
+    const { data: healthData, error: healthError } = await supabase
       .from('client_health_data')
       .insert({
         user_id: userId,
@@ -72,10 +91,15 @@ export async function POST(request) {
         lesiones: sanitize(lesiones || '')
       })
 
-    if (healthError) throw healthError
+    if (healthError) {
+      console.error('❌ Error insertando datos de salud:', healthError)
+      throw healthError
+    }
+    console.log('✅ Datos de salud insertados')
 
     // 3. Crear aceptación legal
-    const { error: legalError } = await supabase
+    console.log('📝 Insertando aceptación legal...')
+    const { data: legalData, error: legalError } = await supabase
       .from('user_legal_acceptances')
       .insert({
         user_id: userId,
@@ -83,17 +107,27 @@ export async function POST(request) {
         user_agent: sanitize(userAgent || '')
       })
 
-    if (legalError) throw legalError
+    if (legalError) {
+      console.error('❌ Error insertando aceptación legal:', legalError)
+      throw legalError
+    }
+    console.log('✅ Aceptación legal insertada')
 
+    console.log('🎉 Registro completado exitosamente')
     return NextResponse.json({ success: true })
 
   } catch (error) {
-    // No exponer detalles del error en producción
-    const isDev = process.env.NODE_ENV === 'development'
+    console.error('💥 Error completo:', error)
+    console.error('Error message:', error.message)
+    console.error('Error details:', error.details)
+    console.error('Error hint:', error.hint)
+
     return NextResponse.json(
       { 
         success: false, 
-        error: isDev ? error.message : 'Error al procesar registro'
+        error: error.message,
+        details: error.details,
+        hint: error.hint
       },
       { status: 500 }
     )
