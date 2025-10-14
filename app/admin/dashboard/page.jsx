@@ -22,9 +22,9 @@ export default function AdminDashboardPage() {
     {
       titulo: 'Layout del Estudio',
       descripcion: 'Gestiona bicis y disponibilidad',
-      ruta: '/admin/layout-estudio',
-      icono: 'Building2',
-      activo: true
+      icono: Building2,
+      href: '/admin/layout-estudio',
+      disponible: true
     },
     {
       titulo: 'Gestión de Bikes',
