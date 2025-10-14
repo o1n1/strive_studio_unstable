@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { User, Mail, Phone, Lock, AlertCircle, Heart, FileText, ArrowRight, ArrowLeft, Check } from 'lucide-react'
+import { User, Mail, Phone, Lock, AlertCircle, Heart, FileText, ArrowRight, ArrowLeft, Check, X, Loader2 } from 'lucide-react'
 import Input from '@/components/ui/Input'
-import { registerUser } from '@/lib/supabase/auth'  // ← ESTE IMPORT FALTABA
+import { registerUser } from '@/lib/supabase/auth'
+import { useDebounce } from '@/hooks/useDebounce'
+import { postJSON } from '@/lib/utils/fetchWithTimeout'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -23,6 +25,16 @@ export default function RegisterPage() {
     aceptaDeslinde: false
   })
   const [loading, setLoading] = useState(false)
+  
+  // Estado para verificación de disponibilidad
+  const [availability, setAvailability] = useState({
+    email: { checking: false, available: null, message: '' },
+    telefono: { checking: false, available: null, message: '' }
+  })
+
+  // Debounce para no verificar en cada tecla
+  const debouncedEmail = useDebounce(formData.email, 800)
+  const debouncedTelefono = useDebounce(formData.telefono, 800)
 
   // Validaciones
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
@@ -42,13 +54,79 @@ export default function RegisterPage() {
     setFormData({ ...formData, [field]: formatPhone(value) })
   }
 
+  // Verificar disponibilidad de email
+  useEffect(() => {
+    const checkEmailAvailability = async () => {
+      if (!debouncedEmail || !validateEmail(debouncedEmail)) {
+        setAvailability(prev => ({ ...prev, email: { checking: false, available: null, message: '' }}))
+        return
+      }
+
+      setAvailability(prev => ({ ...prev, email: { checking: true, available: null, message: '' }}))
+
+      try {
+        const result = await postJSON('/api/check-availability', { email: debouncedEmail })
+        
+        if (result.success && result.email) {
+          setAvailability(prev => ({ 
+            ...prev, 
+            email: { 
+              checking: false, 
+              available: result.email.available,
+              message: result.email.reason || ''
+            }
+          }))
+        }
+      } catch (error) {
+        console.error('Error verificando email:', error)
+        setAvailability(prev => ({ ...prev, email: { checking: false, available: null, message: '' }}))
+      }
+    }
+
+    checkEmailAvailability()
+  }, [debouncedEmail])
+
+  // Verificar disponibilidad de teléfono
+  useEffect(() => {
+    const checkPhoneAvailability = async () => {
+      if (!debouncedTelefono || !validatePhone(debouncedTelefono)) {
+        setAvailability(prev => ({ ...prev, telefono: { checking: false, available: null, message: '' }}))
+        return
+      }
+
+      setAvailability(prev => ({ ...prev, telefono: { checking: true, available: null, message: '' }}))
+
+      try {
+        const result = await postJSON('/api/check-availability', { telefono: debouncedTelefono })
+        
+        if (result.success && result.telefono) {
+          setAvailability(prev => ({ 
+            ...prev, 
+            telefono: { 
+              checking: false, 
+              available: result.telefono.available,
+              message: result.telefono.reason || ''
+            }
+          }))
+        }
+      } catch (error) {
+        console.error('Error verificando teléfono:', error)
+        setAvailability(prev => ({ ...prev, telefono: { checking: false, available: null, message: '' }}))
+      }
+    }
+
+    checkPhoneAvailability()
+  }, [debouncedTelefono])
+
   const canContinueStep1 = 
     formData.nombre.trim() !== '' &&
     formData.apellidos.trim() !== '' &&
     validateEmail(formData.email) &&
     validatePhone(formData.telefono) &&
     validatePassword(formData.password) &&
-    passwordsMatch
+    passwordsMatch &&
+    availability.email.available === true &&
+    availability.telefono.available === true
 
   const canContinueStep2 = 
     formData.emergenciaNombre.trim() !== '' &&
@@ -63,7 +141,6 @@ export default function RegisterPage() {
     setLoading(true)
 
     try {
-      // Registrar usuario en Supabase
       const result = await registerUser({
         email: formData.email,
         password: formData.password,
@@ -77,7 +154,6 @@ export default function RegisterPage() {
       })
 
       if (result.success) {
-        // Redirigir a página de verificación de email
         router.push(`/verificar-email?email=${encodeURIComponent(formData.email)}`)
       } else {
         alert(`Error: ${result.error}`)
@@ -87,6 +163,15 @@ export default function RegisterPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Helper para obtener icono de validación
+  const getValidationIcon = (field) => {
+    const status = availability[field]
+    if (status.checking) return <Loader2 size={18} className="animate-spin" style={{ color: '#9C7A5E' }} />
+    if (status.available === true) return <Check size={18} style={{ color: '#4CAF50' }} />
+    if (status.available === false) return <X size={18} style={{ color: '#AE3F21' }} />
+    return null
   }
 
   const steps = [
@@ -177,26 +262,54 @@ export default function RegisterPage() {
                   />
                 </div>
 
-                <Input
-                  label="Email"
-                  icon={Mail}
-                  type="email"
-                  required
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="tu@email.com"
-                  error={formData.email && !validateEmail(formData.email) ? 'Email inválido' : ''}
-                />
+                {/* Email con verificación */}
+                <div className="relative">
+                  <Input
+                    label="Email"
+                    icon={Mail}
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="tu@email.com"
+                    error={
+                      formData.email && !validateEmail(formData.email) 
+                        ? 'Email inválido' 
+                        : availability.email.available === false 
+                        ? availability.email.message 
+                        : ''
+                    }
+                  />
+                  {formData.email && (
+                    <div className="absolute right-3 top-[42px]">
+                      {getValidationIcon('email')}
+                    </div>
+                  )}
+                </div>
 
-                <Input
-                  label="Teléfono"
-                  icon={Phone}
-                  required
-                  value={formData.telefono}
-                  onChange={(e) => handlePhoneChange('telefono', e.target.value)}
-                  placeholder="555-555-5555"
-                  error={formData.telefono && !validatePhone(formData.telefono) ? 'Teléfono inválido (10 dígitos)' : ''}
-                />
+                {/* Teléfono con verificación */}
+                <div className="relative">
+                  <Input
+                    label="Teléfono"
+                    icon={Phone}
+                    required
+                    value={formData.telefono}
+                    onChange={(e) => handlePhoneChange('telefono', e.target.value)}
+                    placeholder="555-555-5555"
+                    error={
+                      formData.telefono && !validatePhone(formData.telefono) 
+                        ? 'Teléfono inválido (10 dígitos)' 
+                        : availability.telefono.available === false 
+                        ? availability.telefono.message 
+                        : ''
+                    }
+                  />
+                  {formData.telefono && (
+                    <div className="absolute right-3 top-[42px]">
+                      {getValidationIcon('telefono')}
+                    </div>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <Input
@@ -297,46 +410,42 @@ export default function RegisterPage() {
               </div>
             )}
 
-            {/* PASO 3: Carta Deslinde */}
+            {/* PASO 3: Legal */}
             {step === 3 && (
-              <div className="space-y-6 animate-fadeIn">
-                <h2 className="text-2xl font-bold mb-6" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              <div className="space-y-5 animate-fadeIn">
+                <h2 className="text-2xl font-bold mb-8" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
                   Carta de Deslinde de Responsabilidad
                 </h2>
 
                 <div className="p-6 rounded-xl max-h-96 overflow-y-auto" 
                   style={{ 
-                    background: 'rgba(255, 252, 243, 0.05)', 
-                    border: '1px solid rgba(156, 122, 94, 0.3)' 
+                    background: 'rgba(255, 252, 243, 0.05)',
+                    border: '1px solid rgba(156, 122, 94, 0.3)'
                   }}>
                   <p className="text-sm leading-relaxed mb-4" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    Al participar en las actividades de <strong style={{ color: '#AE3F21' }}>STRIVE Cycling Studio</strong>, 
-                    reconozco que el ejercicio físico intenso conlleva riesgos inherentes y acepto la responsabilidad total por 
-                    mi participación.
+                    Al participar en las clases de cycling y actividades físicas en STRIVE Cycling Studio, 
+                    reconozco y acepto que:
                   </p>
-                  <p className="text-sm leading-relaxed mb-4" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    Declaro encontrarme en condiciones físicas adecuadas y haber consultado con un profesional médico antes 
-                    de iniciar cualquier programa de ejercicio. Eximo a STRIVE, sus instructores y personal de toda 
-                    responsabilidad por lesiones, daños o pérdidas que pudieran ocurrir durante mi participación.
-                  </p>
-                  <p className="text-sm leading-relaxed" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    Me comprometo a seguir las instrucciones de los coaches, respetar las normas del estudio y comunicar 
-                    cualquier molestia o limitación física durante las clases.
-                  </p>
+                  <ul className="space-y-2 text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                    <li>• Soy consciente de los riesgos inherentes a la actividad física intensa.</li>
+                    <li>• He consultado con un médico y estoy en condiciones de realizar ejercicio físico.</li>
+                    <li>• Eximo a STRIVE y su personal de cualquier responsabilidad por lesiones.</li>
+                    <li>• Notificaré cualquier condición médica relevante antes de la clase.</li>
+                    <li>• Seguiré las indicaciones del instructor en todo momento.</li>
+                  </ul>
                 </div>
 
-                <label className="flex items-start gap-3 cursor-pointer group">
+                <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.aceptaDeslinde}
                     onChange={(e) => setFormData({ ...formData, aceptaDeslinde: e.target.checked })}
-                    className="mt-1"
+                    className="mt-1 rounded"
                     style={{ accentColor: '#AE3F21' }}
                   />
-                  <span className="text-sm opacity-90 group-hover:opacity-100 transition-opacity" 
-                    style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    He leído y acepto la carta de deslinde de responsabilidad. Comprendo los riesgos asociados 
-                    con la actividad física y libero a STRIVE de toda responsabilidad.
+                  <span className="text-sm" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                    Acepto la carta de deslinde de responsabilidad. 
+                    Comprendo los riesgos asociados con la actividad física y libero a STRIVE de toda responsabilidad.
                   </span>
                 </label>
               </div>
