@@ -20,12 +20,12 @@ export default function AdminDashboardPage() {
 
   const modulos = [
     {
-      titulo: 'Gestión de Salas',
-      descripcion: 'Administra las salas del estudio',
-      icono: Building2,
-      href: '/admin/salas',
-      disponible: true
-    },
+      titulo: 'Layout del Estudio',
+      descripcion: 'Gestiona bicis y disponibilidad',
+      ruta: '/admin/layout-estudio',
+      icono: 'Building2',
+      activo: true
+    }
     {
       titulo: 'Gestión de Bikes',
       descripcion: 'Administra bikes y spots',
