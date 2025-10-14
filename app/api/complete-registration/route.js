@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { checkRateLimit, getClientIP } from '@/lib/utils/rateLimit'
 import { logger } from '@/lib/utils/logger'
-import { validateEmail, validatePhone, validatePassword } from '@/lib/validations'
+import { validateEmail, validatePhone } from '@/lib/validations'
 
 const MAX_REGISTRATION_ATTEMPTS = 5
 
@@ -52,7 +52,18 @@ export async function POST(request) {
     const body = await request.json()
     logger.log('📦 Body recibido (datos sensibles ocultos)')
 
-    const { userId, email, nombre, apellidos, telefono, emergenciaNombre, emergenciaTelefono, alergias, lesiones, userAgent } = body
+    const { 
+      userId, 
+      email, 
+      nombre, 
+      apellidos, 
+      telefono, 
+      emergenciaNombre, 
+      emergenciaTelefono, 
+      alergias, 
+      lesiones, 
+      userAgent 
+    } = body
 
     // Validar campos requeridos
     if (!userId || !email || !nombre || !apellidos || !telefono || !emergenciaNombre || !emergenciaTelefono) {
@@ -115,7 +126,7 @@ export async function POST(request) {
       )
     }
 
-    // Sanitizar strings
+    // Sanitizar strings (máximo 255 caracteres)
     const sanitize = (str) => str.trim().slice(0, 255)
 
     logger.log('🔑 Verificando credenciales...')
@@ -142,142 +153,74 @@ export async function POST(request) {
 
     logger.log('✅ Cliente Supabase creado')
 
-    // Verificar que el usuario existe en auth.users
-    const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(userId)
-    
-    if (authError || !authUser) {
-      logger.error('❌ Usuario no encontrado en auth.users:', authError)
-      return NextResponse.json(
-        { success: false, error: 'Usuario no encontrado' },
-        { status: 404 }
-      )
-    }
+    // 🚀 MEJORA: Llamar a función RPC con transacción atómica
+    logger.log('📝 Ejecutando registro con transacción atómica...')
 
-    logger.log('✅ Usuario verificado en auth.users')
+    const { data: result, error: rpcError } = await supabase.rpc(
+      'complete_user_registration',
+      {
+        p_user_id: userId,
+        p_email: sanitize(email),
+        p_nombre: sanitize(nombre),
+        p_apellidos: sanitize(apellidos),
+        p_telefono: sanitize(telefono),
+        p_emergencia_nombre: sanitize(emergenciaNombre),
+        p_emergencia_telefono: sanitize(emergenciaTelefono),
+        p_alergias: alergias ? sanitize(alergias) : null,
+        p_lesiones: lesiones ? sanitize(lesiones) : null,
+        p_ip_address: ip,
+        p_user_agent: userAgent || null
+      }
+    )
 
-    // Verificar si ya existe el perfil
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', userId)
-      .single()
-
-    if (existingProfile) {
-      logger.log('⚠️ El perfil ya existe')
-      return NextResponse.json({
-        success: true,
-        message: 'El perfil ya estaba creado'
-      })
-    }
-
-    // Verificar duplicados de email y teléfono
-    const { data: duplicates, error: duplicateError } = await supabase
-      .from('profiles')
-      .select('email, telefono')
-      .or(`email.eq.${email},telefono.eq.${telefono}`)
-
-    if (duplicateError) {
-      logger.error('❌ Error verificando duplicados:', duplicateError)
-    }
-
-    if (duplicates && duplicates.length > 0) {
-      const isDuplicateEmail = duplicates.some(d => d.email === email)
-      const isDuplicatePhone = duplicates.some(d => d.telefono === telefono)
+    if (rpcError) {
+      logger.error('❌ Error en RPC function:', rpcError)
       
-      if (isDuplicateEmail && isDuplicatePhone) {
-        return NextResponse.json(
-          { success: false, error: 'Email y teléfono ya registrados' },
-          { status: 409 }
-        )
-      } else if (isDuplicateEmail) {
+      // Manejo de errores específicos
+      if (rpcError.message.includes('Email ya registrado')) {
         return NextResponse.json(
           { success: false, error: 'Email ya registrado' },
           { status: 409 }
         )
-      } else if (isDuplicatePhone) {
+      }
+      
+      if (rpcError.message.includes('Teléfono ya registrado')) {
         return NextResponse.json(
           { success: false, error: 'Teléfono ya registrado' },
           { status: 409 }
         )
       }
-    }
 
-    logger.log('📝 Insertando perfil en la base de datos...')
+      if (rpcError.message.includes('Usuario no encontrado')) {
+        return NextResponse.json(
+          { success: false, error: 'Usuario no encontrado en el sistema de autenticación' },
+          { status: 404 }
+        )
+      }
 
-    // 1️⃣ Insertar perfil básico del usuario en tabla profiles
-    const { data: profileData, error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        id: userId,
-        email: sanitize(email),
-        nombre: sanitize(nombre),
-        apellidos: sanitize(apellidos),
-        telefono: sanitize(telefono),
-        rol: 'cliente',
-        activo: true
-      })
-      .select()
-      .single()
-
-    if (profileError) {
-      logger.error('❌ Error insertando perfil:', profileError)
-      logger.error('Detalles del error:', {
-        message: profileError.message,
-        details: profileError.details,
-        hint: profileError.hint,
-        code: profileError.code
-      })
-      
+      // Error genérico
       return NextResponse.json(
-        { success: false, error: `Error al crear el perfil: ${profileError.message}` },
+        { success: false, error: `Error al completar el registro: ${rpcError.message}` },
         { status: 500 }
       )
     }
 
-    logger.success('Perfil creado exitosamente:', userId)
-
-    // 2️⃣ Insertar datos de salud y emergencia en tabla client_health_data
-    const { error: healthError } = await supabase
-      .from('client_health_data')
-      .insert({
-        user_id: userId,
-        emergencia_nombre: sanitize(emergenciaNombre),
-        emergencia_telefono: sanitize(emergenciaTelefono),
-        alergias: alergias ? sanitize(alergias) : null,
-        lesiones: lesiones ? sanitize(lesiones) : null
-      })
-
-    if (healthError) {
-      logger.error('❌ Error insertando datos de salud:', healthError)
-      logger.warn('⚠️ Perfil creado pero datos de salud no guardados')
-    } else {
-      logger.success('Datos de salud guardados exitosamente')
+    // Verificar respuesta de la función
+    if (!result || !result.success) {
+      logger.error('❌ Función RPC retornó error:', result)
+      return NextResponse.json(
+        { success: false, error: result?.error || 'Error desconocido al completar el registro' },
+        { status: 500 }
+      )
     }
 
-    // 3️⃣ Log de auditoría
-    const { error: logError } = await supabase
-      .from('audit_logs')
-      .insert({
-        user_id: userId,
-        action: 'user_registered',
-        details: {
-          email,
-          nombre,
-          apellidos,
-          user_agent: userAgent,
-          ip: ip
-        },
-        ip_address: ip,
-        user_agent: userAgent
-      })
-
-    if (logError) {
-      logger.warn('⚠️ Error guardando log de auditoría:', logError)
-    }
+    logger.success('✅ Registro completado exitosamente con transacción atómica')
+    logger.log('📊 Resultado:', result.message)
 
     return NextResponse.json({
       success: true,
-      profile: profileData
+      message: result.message,
+      profile_id: result.profile_id
     })
 
   } catch (error) {
