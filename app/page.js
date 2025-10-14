@@ -8,7 +8,6 @@ import AuthLayout from '@/components/layouts/AuthLayout'
 import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
-import { logger } from '@/lib/utils/logger'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -45,6 +44,7 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
+      // Llamar al endpoint API de login con rate limiting
       const response = await fetch('/api/login', {
         method: 'POST',
         headers: {
@@ -59,20 +59,22 @@ export default function LoginPage() {
       const result = await response.json()
 
       if (result.success) {
+        // Redirigir según el rol del usuario
         const redirectUrl = getRedirectUrl(result.profile.rol)
-        logger.log('🔄 Redirigiendo a dashboard')
+        console.log('🔄 Redirigiendo a:', redirectUrl)
         router.push(redirectUrl)
       } else {
+        // Mostrar error
         setErrors({ general: result.error })
       }
     } catch (error) {
-      logger.error('Error en login:', error)
       setErrors({ general: 'Error inesperado. Intenta de nuevo.' })
     } finally {
       setLoading(false)
     }
   }
 
+  // Función para determinar la URL según el rol
   const getRedirectUrl = (rol) => {
     switch (rol) {
       case 'admin':
@@ -84,7 +86,7 @@ export default function LoginPage() {
       case 'staff':
         return '/staff/checkin'
       default:
-        return '/cliente/reservas'
+        return '/cliente/reservas' // Por defecto ir a cliente
     }
   }
 
@@ -93,6 +95,7 @@ export default function LoginPage() {
       <Card>
         <form onSubmit={handleSubmit} className="space-y-6">
           
+          {/* Mensaje de error general */}
           {errors.general && (
             <div className="p-4 rounded-xl" 
               style={{ background: 'rgba(174, 63, 33, 0.1)', border: '1px solid rgba(174, 63, 33, 0.3)' }}>
