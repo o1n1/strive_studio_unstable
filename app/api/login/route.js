@@ -10,6 +10,22 @@ export async function POST(request) {
   logger.log('🔵 Endpoint /api/login llamado')
 
   try {
+    // 🛡️ CSRF PROTECTION - Verificar origin
+    const origin = request.headers.get('origin')
+    const allowedOrigins = [
+      process.env.NEXT_PUBLIC_SITE_URL,
+      'http://localhost:3000',
+      'https://localhost:3000'
+    ].filter(Boolean)
+    
+    if (origin && !allowedOrigins.includes(origin)) {
+      logger.warn(`⚠️ Origin no permitido: ${origin}`)
+      return NextResponse.json(
+        { success: false, error: 'Acceso no autorizado' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { email, password } = body
 
