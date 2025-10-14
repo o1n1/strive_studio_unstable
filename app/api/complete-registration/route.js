@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { checkRateLimit, getClientIP } from '@/lib/utils/rateLimit'
 import { logger } from '@/lib/utils/logger'
-import { validateEmail, validatePhone } from '@/lib/validations'
+import { validateEmail, validatePhone, validatePassword } from '@/lib/validations'
 
 const MAX_REGISTRATION_ATTEMPTS = 5
 
@@ -119,8 +119,6 @@ export async function POST(request) {
     const sanitize = (str) => str.trim().slice(0, 255)
 
     logger.log('🔑 Verificando credenciales...')
-    logger.log('URL exists:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
-    logger.log('Service Role Key exists:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
 
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
       logger.error('❌ Variables de entorno faltantes')
@@ -206,7 +204,7 @@ export async function POST(request) {
 
     logger.log('📝 Insertando perfil en la base de datos...')
 
-    // Insertar perfil del usuario
+    // 1️⃣ Insertar perfil básico del usuario en tabla profiles
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
       .insert({
@@ -215,14 +213,8 @@ export async function POST(request) {
         nombre: sanitize(nombre),
         apellidos: sanitize(apellidos),
         telefono: sanitize(telefono),
-        emergencia_nombre: sanitize(emergenciaNombre),
-        emergencia_telefono: sanitize(emergenciaTelefono),
-        alergias: alergias ? sanitize(alergias) : null,
-        lesiones: lesiones ? sanitize(lesiones) : null,
         rol: 'cliente',
-        creditos: 0,
-        activo: true,
-        fecha_registro: new Date().toISOString()
+        activo: true
       })
       .select()
       .single()
@@ -244,7 +236,25 @@ export async function POST(request) {
 
     logger.success('Perfil creado exitosamente:', userId)
 
-    // Log de auditoría
+    // 2️⃣ Insertar datos de salud y emergencia en tabla client_health_data
+    const { error: healthError } = await supabase
+      .from('client_health_data')
+      .insert({
+        user_id: userId,
+        emergencia_nombre: sanitize(emergenciaNombre),
+        emergencia_telefono: sanitize(emergenciaTelefono),
+        alergias: alergias ? sanitize(alergias) : null,
+        lesiones: lesiones ? sanitize(lesiones) : null
+      })
+
+    if (healthError) {
+      logger.error('❌ Error insertando datos de salud:', healthError)
+      logger.warn('⚠️ Perfil creado pero datos de salud no guardados')
+    } else {
+      logger.success('Datos de salud guardados exitosamente')
+    }
+
+    // 3️⃣ Log de auditoría
     const { error: logError } = await supabase
       .from('audit_logs')
       .insert({
