@@ -23,6 +23,15 @@ export default function LayoutEstudioPage() {
     notas: ''
   })
 
+  // Función para obtener el nombre según tipo de sala
+  const getNombreSpot = (tipo) => {
+    return tipo === 'cycling' ? 'Bici' : 'Tapete'
+  }
+
+  const getNombreSpotPlural = (tipo) => {
+    return tipo === 'cycling' ? 'bicis' : 'tapetes'
+  }
+
   useEffect(() => {
     if (isAuthorized) {
       fetchSalas()
@@ -32,20 +41,26 @@ export default function LayoutEstudioPage() {
   useEffect(() => {
     if (salaSeleccionada) {
       fetchSpots()
-      // Suscribirse a cambios en tiempo real
-      const subscription = supabase
-        .channel('spots-changes')
+      
+      // Suscripción a cambios en tiempo real
+      const channel = supabase
+        .channel(`spots-${salaSeleccionada.id}`)
         .on('postgres_changes', 
-          { event: '*', schema: 'public', table: 'spots', filter: `room_id=eq.${salaSeleccionada.id}` },
+          { 
+            event: '*', 
+            schema: 'public', 
+            table: 'spots', 
+            filter: `room_id=eq.${salaSeleccionada.id}` 
+          },
           (payload) => {
-            console.log('Cambio detectado:', payload)
-            fetchSpots() // Recargar spots cuando hay cambios
+            console.log('Cambio en tiempo real:', payload)
+            fetchSpots()
           }
         )
         .subscribe()
 
       return () => {
-        subscription.unsubscribe()
+        supabase.removeChannel(channel)
       }
     }
   }, [salaSeleccionada])
@@ -65,6 +80,7 @@ export default function LayoutEstudioPage() {
       }
     } catch (error) {
       console.error('Error al cargar salas:', error)
+      alert('Error al cargar las salas')
     } finally {
       setLoading(false)
     }
@@ -84,6 +100,7 @@ export default function LayoutEstudioPage() {
       setSpots(data || [])
     } catch (error) {
       console.error('Error al cargar spots:', error)
+      alert('Error al cargar los spots')
     }
   }
 
@@ -125,10 +142,11 @@ export default function LayoutEstudioPage() {
       if (error) throw error
       
       handleCloseEditModal()
-      // fetchSpots() se llamará automáticamente por la suscripción en tiempo real
+      // Recargar inmediatamente
+      await fetchSpots()
     } catch (error) {
       console.error('Error al actualizar spot:', error)
-      alert('Error al actualizar la bici')
+      alert('Error al actualizar el spot')
     }
   }
 
@@ -144,19 +162,23 @@ export default function LayoutEstudioPage() {
         .insert({
           room_id: salaSeleccionada.id,
           numero: maxNumero + 1,
-          tipo: salaSeleccionada.tipo === 'cycling' ? 'bike' : 'position',
+          tipo: salaSeleccionada.tipo === 'cycling' ? 'bike' : 'mat',
           estado: 'disponible'
         })
 
       if (error) throw error
+      
+      // Recargar inmediatamente después de agregar
+      await fetchSpots()
     } catch (error) {
-      console.error('Error al agregar bici:', error)
-      alert('Error al agregar bici')
+      console.error('Error al agregar spot:', error)
+      alert(`Error al agregar ${getNombreSpot(salaSeleccionada.tipo).toLowerCase()}`)
     }
   }
 
   const handleEliminarBici = async (spotId) => {
-    if (!confirm('¿Estás seguro de eliminar esta bici? Esta acción no se puede deshacer.')) return
+    const nombreSpot = getNombreSpot(salaSeleccionada?.tipo).toLowerCase()
+    if (!confirm(`¿Estás seguro de eliminar este ${nombreSpot}? Esta acción no se puede deshacer.`)) return
 
     try {
       const { error } = await supabase
@@ -165,9 +187,13 @@ export default function LayoutEstudioPage() {
         .eq('id', spotId)
 
       if (error) throw error
+      
+      handleCloseEditModal()
+      // Recargar inmediatamente después de eliminar
+      await fetchSpots()
     } catch (error) {
-      console.error('Error al eliminar bici:', error)
-      alert('Error al eliminar bici')
+      console.error('Error al eliminar spot:', error)
+      alert(`Error al eliminar ${nombreSpot}`)
     }
   }
 
@@ -196,7 +222,7 @@ export default function LayoutEstudioPage() {
       case 'disponible': return 'Disponible'
       case 'mantenimiento': return 'Mantenimiento'
       case 'reparacion': return 'Reparación'
-      case 'inactivo': return 'Inactiva'
+      case 'inactivo': return 'Inactivo'
       default: return estado
     }
   }
@@ -228,12 +254,12 @@ export default function LayoutEstudioPage() {
               Layout del Estudio
             </h1>
             <p className="text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-              Gestiona la disponibilidad y estado de todas las bicis
+              Gestiona la disponibilidad y estado de todos los espacios
             </p>
           </div>
           <Button onClick={handleAgregarBici} disabled={!salaSeleccionada}>
             <Plus size={20} />
-            Agregar Bici
+            Agregar {salaSeleccionada ? getNombreSpot(salaSeleccionada.tipo) : 'Spot'}
           </Button>
         </div>
 
@@ -321,27 +347,27 @@ export default function LayoutEstudioPage() {
                   {stats.inactivas}
                 </p>
                 <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Inactivas
+                  Inactivos
                 </p>
               </div>
             </div>
           </Card>
         </div>
 
-        {/* Grid de bicis */}
+        {/* Grid de bicis/tapetes */}
         {salaSeleccionada && (
           <Card>
             {spots.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-lg font-semibold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  No hay bicis en esta sala
+                  No hay {getNombreSpotPlural(salaSeleccionada.tipo)} en esta sala
                 </p>
                 <p className="text-sm opacity-70 mb-6" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Comienza agregando la primera bici
+                  Comienza agregando el primer {getNombreSpot(salaSeleccionada.tipo).toLowerCase()}
                 </p>
                 <Button onClick={handleAgregarBici}>
                   <Plus size={20} />
-                  Agregar Primera Bici
+                  Agregar Primer {getNombreSpot(salaSeleccionada.tipo)}
                 </Button>
               </div>
             ) : (
@@ -386,13 +412,13 @@ export default function LayoutEstudioPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-2xl font-bold mb-6" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              Editar Bici #{spotEditando.numero}
+              Editar {getNombreSpot(salaSeleccionada?.tipo)} #{spotEditando.numero}
             </h2>
 
             <form onSubmit={handleUpdateSpot} className="space-y-5">
               <div className="space-y-2">
                 <label className="block text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Número de Bici
+                  Número
                 </label>
                 <input
                   type="number"
@@ -428,7 +454,7 @@ export default function LayoutEstudioPage() {
                   <option value="disponible" style={{ background: '#353535' }}>🟢 Disponible</option>
                   <option value="mantenimiento" style={{ background: '#353535' }}>🟡 Mantenimiento</option>
                   <option value="reparacion" style={{ background: '#353535' }}>🔴 Reparación</option>
-                  <option value="inactivo" style={{ background: '#353535' }}>⚫ Inactiva</option>
+                  <option value="inactivo" style={{ background: '#353535' }}>⚫ Inactivo</option>
                 </select>
               </div>
 
