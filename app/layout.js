@@ -1,4 +1,5 @@
 import "./globals.css";
+import QueryProvider from "@/providers/QueryProvider";
 
 export const metadata = {
   title: "Strive Studio - No Limits, Just Power",
@@ -9,7 +10,9 @@ export default function RootLayout({ children }) {
   return (
     <html lang="es">
       <body className="antialiased">
-        {children}
+        <QueryProvider>
+          {children}
+        </QueryProvider>
       </body>
     </html>
   );

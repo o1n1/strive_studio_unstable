@@ -2,30 +2,30 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { Mail, Lock } from 'lucide-react'
 import AuthLayout from '@/components/layouts/AuthLayout'
 import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
-import { postJSON } from '@/lib/utils/fetchWithTimeout'
 import { supabase } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [formData, setFormData] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
   const [errors, setErrors] = useState({})
 
-  // 🔒 MEJORA #2: Verificar sesión existente al cargar
+  // Verificar sesión existente al cargar
   useEffect(() => {
     const checkExistingSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
         
         if (session) {
-          // Obtener perfil para redirigir al dashboard correcto
           const { data: profile, error } = await supabase
             .from('profiles')
             .select('rol')
@@ -33,6 +33,12 @@ export default function LoginPage() {
             .single()
           
           if (profile && !error) {
+            // Setear caché antes de redirigir para carga instantánea
+            queryClient.setQueryData(['user'], {
+              user: session.user,
+              profile
+            })
+            
             const redirectUrl = getRedirectUrl(profile.rol)
             router.push(redirectUrl)
             return
@@ -46,7 +52,7 @@ export default function LoginPage() {
     }
     
     checkExistingSession()
-  }, [router])
+  }, [router, queryClient])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -54,7 +60,7 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      // Login directo con Supabase en cliente para persistir sesión
+      // Login con Supabase
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: formData.email.trim().toLowerCase(),
         password: formData.password
@@ -70,10 +76,10 @@ export default function LoginPage() {
         return
       }
 
-      // Obtener perfil para redirigir
+      // Obtener perfil
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('rol')
+        .select('*')
         .eq('id', authData.user.id)
         .single()
 
@@ -81,6 +87,12 @@ export default function LoginPage() {
         setErrors({ general: 'Error al obtener perfil de usuario' })
         return
       }
+
+      // 🚀 MEJORA: Setear caché ANTES de redirigir para carga instantánea
+      queryClient.setQueryData(['user'], {
+        user: authData.user,
+        profile
+      })
 
       const redirectUrl = getRedirectUrl(profile.rol)
       router.push(redirectUrl)
@@ -115,7 +127,6 @@ export default function LoginPage() {
     }
   }
 
-  // Mostrar loading mientras verifica sesión
   if (checkingSession) {
     return (
       <AuthLayout>
