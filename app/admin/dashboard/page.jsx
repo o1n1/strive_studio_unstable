@@ -85,13 +85,13 @@ export default function AdminDashboardPage() {
         </Card>
 
         {/* Grid de Módulos */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-5 justify-items-center">
           {modulos.map((modulo, index) => {
             const Icono = modulo.icono
             
             if (modulo.disponible) {
               return (
-                <Link key={index} href={modulo.href}>
+                <Link key={index} href={modulo.href} className="w-full max-w-sm">
                   <Card className="h-full">
                     <div className="space-y-3 sm:space-y-4 transition-all hover:opacity-80 cursor-pointer">
                       <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center"
@@ -112,7 +112,7 @@ export default function AdminDashboardPage() {
               )
             } else {
               return (
-                <Card key={index} className="h-full">
+                <Card key={index} className="h-full w-full max-w-sm">
                   <div className="space-y-3 sm:space-y-4 opacity-50 cursor-not-allowed">
                     <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center"
                       style={{ background: 'rgba(156, 122, 94, 0.2)' }}>
