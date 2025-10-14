@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, Trash2, Loader2, RefreshCw, AlertCircle, CheckCircle, Wrench, Power } from 'lucide-react'
+import { Plus, Edit2, Trash2, Loader2, RefreshCw, AlertCircle, CheckCircle, Wrench, Power, LayoutGrid, List, User, UserPlus } from 'lucide-react'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
@@ -15,13 +15,20 @@ export default function LayoutEstudioPage() {
   const [salaSeleccionada, setSalaSeleccionada] = useState(null)
   const [spots, setSpots] = useState([])
   const [loading, setLoading] = useState(true)
+  const [vistaActual, setVistaActual] = useState('layout')
   const [showEditModal, setShowEditModal] = useState(false)
   const [spotEditando, setSpotEditando] = useState(null)
+  const [draggedSpot, setDraggedSpot] = useState(null)
   const [formData, setFormData] = useState({
     numero: '',
+    tipo: 'bike',
     estado: 'disponible',
     notas: ''
   })
+
+  // Configuración del grid
+  const COLUMNAS = 8
+  const FILAS = 6
 
   // Función para obtener el nombre según tipo de sala
   const getNombreSpot = (tipo) => {
@@ -42,7 +49,6 @@ export default function LayoutEstudioPage() {
     if (salaSeleccionada) {
       fetchSpots()
       
-      // Suscripción a cambios en tiempo real
       const channel = supabase
         .channel(`spots-${salaSeleccionada.id}`)
         .on('postgres_changes', 
@@ -107,7 +113,8 @@ export default function LayoutEstudioPage() {
   const handleOpenEditModal = (spot) => {
     setSpotEditando(spot)
     setFormData({
-      numero: spot.numero.toString(),
+      numero: spot.numero?.toString() || '',
+      tipo: spot.tipo || 'bike',
       estado: spot.estado,
       notas: spot.notas || ''
     })
@@ -119,6 +126,7 @@ export default function LayoutEstudioPage() {
     setSpotEditando(null)
     setFormData({
       numero: '',
+      tipo: 'bike',
       estado: 'disponible',
       notas: ''
     })
@@ -129,20 +137,26 @@ export default function LayoutEstudioPage() {
     if (!spotEditando) return
 
     try {
+      const updateData = {
+        tipo: formData.tipo,
+        estado: formData.estado,
+        notas: formData.notas,
+        updated_at: new Date().toISOString()
+      }
+
+      // Solo actualizar número si no es coach
+      if (formData.tipo !== 'coach') {
+        updateData.numero = parseInt(formData.numero)
+      }
+
       const { error } = await supabase
         .from('spots')
-        .update({
-          numero: parseInt(formData.numero),
-          estado: formData.estado,
-          notas: formData.notas,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', spotEditando.id)
 
       if (error) throw error
       
       handleCloseEditModal()
-      // Recargar inmediatamente
       await fetchSpots()
     } catch (error) {
       console.error('Error al actualizar spot:', error)
@@ -150,35 +164,57 @@ export default function LayoutEstudioPage() {
     }
   }
 
-  const handleAgregarBici = async () => {
+  const handleAgregarSpot = async (tipoSpot) => {
     if (!salaSeleccionada) return
 
     try {
-      // Obtener el siguiente número disponible
-      const maxNumero = spots.length > 0 ? Math.max(...spots.map(s => s.numero)) : 0
+      // Si es coach, no asignar número
+      let numero = null
+      if (tipoSpot !== 'coach') {
+        const maxNumero = spots.filter(s => s.tipo !== 'coach').length > 0 
+          ? Math.max(...spots.filter(s => s.tipo !== 'coach').map(s => s.numero)) 
+          : 0
+        numero = maxNumero + 1
+      }
+      
+      // Encontrar primera posición vacía en el grid
+      let fila = null
+      let columna = null
+      
+      for (let f = 1; f <= FILAS; f++) {
+        for (let c = 1; c <= COLUMNAS; c++) {
+          const ocupado = spots.some(s => s.fila === f && s.columna === c)
+          if (!ocupado) {
+            fila = f
+            columna = c
+            break
+          }
+        }
+        if (fila && columna) break
+      }
       
       const { error } = await supabase
         .from('spots')
         .insert({
           room_id: salaSeleccionada.id,
-          numero: maxNumero + 1,
-          tipo: salaSeleccionada.tipo === 'cycling' ? 'bike' : 'mat',
-          estado: 'disponible'
+          numero: numero,
+          tipo: tipoSpot,
+          estado: 'disponible',
+          fila: fila,
+          columna: columna
         })
 
       if (error) throw error
       
-      // Recargar inmediatamente después de agregar
       await fetchSpots()
     } catch (error) {
       console.error('Error al agregar spot:', error)
-      alert(`Error al agregar ${getNombreSpot(salaSeleccionada.tipo).toLowerCase()}`)
+      alert('Error al agregar spot')
     }
   }
 
-  const handleEliminarBici = async (spotId) => {
-    const nombreSpot = getNombreSpot(salaSeleccionada?.tipo).toLowerCase()
-    if (!confirm(`¿Estás seguro de eliminar este ${nombreSpot}? Esta acción no se puede deshacer.`)) return
+  const handleEliminarSpot = async (spotId) => {
+    if (!confirm('¿Estás seguro de eliminar este spot? Esta acción no se puede deshacer.')) return
 
     try {
       const { error } = await supabase
@@ -189,15 +225,60 @@ export default function LayoutEstudioPage() {
       if (error) throw error
       
       handleCloseEditModal()
-      // Recargar inmediatamente después de eliminar
       await fetchSpots()
     } catch (error) {
       console.error('Error al eliminar spot:', error)
-      alert(`Error al eliminar ${nombreSpot}`)
+      alert('Error al eliminar spot')
     }
   }
 
-  const getEstadoColor = (estado) => {
+  // Funciones para Drag & Drop
+  const handleDragStart = (e, spot) => {
+    setDraggedSpot(spot)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleDrop = async (e, fila, columna) => {
+    e.preventDefault()
+    
+    if (!draggedSpot) return
+
+    const spotEnPosicion = spots.find(s => s.fila === fila && s.columna === columna && s.id !== draggedSpot.id)
+    if (spotEnPosicion) {
+      alert('Esta posición ya está ocupada')
+      setDraggedSpot(null)
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('spots')
+        .update({
+          fila: fila,
+          columna: columna,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', draggedSpot.id)
+
+      if (error) throw error
+      
+      await fetchSpots()
+      setDraggedSpot(null)
+    } catch (error) {
+      console.error('Error al mover spot:', error)
+      alert('Error al mover la posición')
+      setDraggedSpot(null)
+    }
+  }
+
+  const getEstadoColor = (estado, tipo) => {
+    if (tipo === 'coach') return '#AE3F21'
+    
     switch (estado) {
       case 'disponible': return '#10b981'
       case 'mantenimiento': return '#f59e0b'
@@ -207,7 +288,9 @@ export default function LayoutEstudioPage() {
     }
   }
 
-  const getEstadoIcon = (estado) => {
+  const getEstadoIcon = (tipo, estado) => {
+    if (tipo === 'coach') return User
+    
     switch (estado) {
       case 'disponible': return CheckCircle
       case 'mantenimiento': return Wrench
@@ -227,13 +310,93 @@ export default function LayoutEstudioPage() {
     }
   }
 
+  const getTipoLabel = (tipo) => {
+    switch (tipo) {
+      case 'bike': return 'Bici'
+      case 'mat': return 'Tapete'
+      case 'coach': return 'Coach'
+      case 'position': return 'Posición'
+      default: return tipo
+    }
+  }
+
   // Calcular estadísticas
+  const spotsClientes = spots.filter(s => s.tipo !== 'coach')
+  const coaches = spots.filter(s => s.tipo === 'coach')
+  
   const stats = {
-    total: spots.length,
-    disponibles: spots.filter(s => s.estado === 'disponible').length,
-    mantenimiento: spots.filter(s => s.estado === 'mantenimiento').length,
-    reparacion: spots.filter(s => s.estado === 'reparacion').length,
-    inactivas: spots.filter(s => s.estado === 'inactivo').length
+    total: spotsClientes.length,
+    disponibles: spotsClientes.filter(s => s.estado === 'disponible').length,
+    mantenimiento: spotsClientes.filter(s => s.estado === 'mantenimiento').length,
+    reparacion: spotsClientes.filter(s => s.estado === 'reparacion').length,
+    inactivas: spotsClientes.filter(s => s.estado === 'inactivo').length,
+    coaches: coaches.length
+  }
+
+  // Renderizar grid layout
+  const renderGridLayout = () => {
+    const grid = []
+    
+    for (let fila = 1; fila <= FILAS; fila++) {
+      const row = []
+      
+      for (let col = 1; col <= COLUMNAS; col++) {
+        const spotEnPosicion = spots.find(s => s.fila === fila && s.columna === col)
+        
+        if (spotEnPosicion) {
+          const Icon = getEstadoIcon(spotEnPosicion.tipo, spotEnPosicion.estado)
+          const color = getEstadoColor(spotEnPosicion.estado, spotEnPosicion.tipo)
+          const isCoach = spotEnPosicion.tipo === 'coach'
+          
+          row.push(
+            <div
+              key={`${fila}-${col}`}
+              draggable
+              onDragStart={(e) => handleDragStart(e, spotEnPosicion)}
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, fila, col)}
+              onClick={() => handleOpenEditModal(spotEnPosicion)}
+              className="aspect-square rounded-xl p-2 flex flex-col items-center justify-center cursor-move transition-all hover:scale-105"
+              style={{
+                background: isCoach ? 'rgba(174, 63, 33, 0.2)' : `${color}20`,
+                border: `2px solid ${isCoach ? 'rgba(174, 63, 33, 0.6)' : `${color}40`}`
+              }}
+            >
+              <Icon size={20} style={{ color }} />
+              {isCoach ? (
+                <p className="text-xs font-bold mt-1 text-center" style={{ color, fontFamily: 'Montserrat, sans-serif' }}>
+                  COACH
+                </p>
+              ) : (
+                <p className="text-xl font-bold mt-1" style={{ color, fontFamily: 'Montserrat, sans-serif' }}>
+                  {spotEnPosicion.numero}
+                </p>
+              )}
+            </div>
+          )
+        } else {
+          row.push(
+            <div
+              key={`${fila}-${col}`}
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, fila, col)}
+              className="aspect-square rounded-xl border-2 border-dashed transition-all hover:border-solid hover:bg-white/5"
+              style={{
+                borderColor: 'rgba(156, 122, 94, 0.2)'
+              }}
+            />
+          )
+        }
+      }
+      
+      grid.push(
+        <div key={fila} className="grid grid-cols-8 gap-2">
+          {row}
+        </div>
+      )
+    }
+    
+    return grid
   }
 
   if (authLoading || loading) {
@@ -254,37 +417,80 @@ export default function LayoutEstudioPage() {
               Layout del Estudio
             </h1>
             <p className="text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-              Gestiona la disponibilidad y estado de todos los espacios
+              Gestiona la disponibilidad y organización visual de los espacios
             </p>
           </div>
-          <Button onClick={handleAgregarBici} disabled={!salaSeleccionada}>
-            <Plus size={20} />
-            Agregar {salaSeleccionada ? getNombreSpot(salaSeleccionada.tipo) : 'Spot'}
-          </Button>
+          <div className="flex gap-3">
+            <Button 
+              onClick={() => handleAgregarSpot(salaSeleccionada?.tipo === 'cycling' ? 'bike' : 'mat')} 
+              disabled={!salaSeleccionada}
+            >
+              <Plus size={20} />
+              {salaSeleccionada ? getNombreSpot(salaSeleccionada.tipo) : 'Spot'}
+            </Button>
+            <Button 
+              onClick={() => handleAgregarSpot('coach')} 
+              disabled={!salaSeleccionada}
+              variant="secondary"
+            >
+              <UserPlus size={20} />
+              Coach
+            </Button>
+          </div>
         </div>
 
-        {/* Selector de sala */}
-        {salas.length > 0 && (
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            {salas.map((sala) => (
-              <button
-                key={sala.id}
-                onClick={() => setSalaSeleccionada(sala)}
-                className="px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all"
-                style={{
-                  background: salaSeleccionada?.id === sala.id ? '#AE3F21' : 'rgba(156, 122, 94, 0.2)',
-                  color: salaSeleccionada?.id === sala.id ? '#FFFCF3' : '#B39A72',
-                  fontFamily: 'Montserrat, sans-serif'
-                }}
-              >
-                {sala.nombre}
-              </button>
-            ))}
+        {/* Selector de sala y vista */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          {salas.length > 0 && (
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {salas.map((sala) => (
+                <button
+                  key={sala.id}
+                  onClick={() => setSalaSeleccionada(sala)}
+                  className="px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all"
+                  style={{
+                    background: salaSeleccionada?.id === sala.id ? '#AE3F21' : 'rgba(156, 122, 94, 0.2)',
+                    color: salaSeleccionada?.id === sala.id ? '#FFFCF3' : '#B39A72',
+                    fontFamily: 'Montserrat, sans-serif'
+                  }}
+                >
+                  {sala.nombre}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Toggle de vista */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setVistaActual('layout')}
+              className="px-4 py-2 rounded-xl font-semibold flex items-center gap-2 transition-all"
+              style={{
+                background: vistaActual === 'layout' ? '#AE3F21' : 'rgba(156, 122, 94, 0.2)',
+                color: vistaActual === 'layout' ? '#FFFCF3' : '#B39A72',
+                fontFamily: 'Montserrat, sans-serif'
+              }}
+            >
+              <LayoutGrid size={18} />
+              Layout
+            </button>
+            <button
+              onClick={() => setVistaActual('lista')}
+              className="px-4 py-2 rounded-xl font-semibold flex items-center gap-2 transition-all"
+              style={{
+                background: vistaActual === 'lista' ? '#AE3F21' : 'rgba(156, 122, 94, 0.2)',
+                color: vistaActual === 'lista' ? '#FFFCF3' : '#B39A72',
+                fontFamily: 'Montserrat, sans-serif'
+              }}
+            >
+              <List size={18} />
+              Lista
+            </button>
           </div>
-        )}
+        </div>
 
         {/* Estadísticas */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
           <Card>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg flex items-center justify-center"
@@ -352,49 +558,126 @@ export default function LayoutEstudioPage() {
               </div>
             </div>
           </Card>
+
+          <Card>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                style={{ background: 'rgba(174, 63, 33, 0.2)' }}>
+                <User size={20} style={{ color: '#AE3F21' }} />
+              </div>
+              <div>
+                <p className="text-2xl font-bold" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
+                  {stats.coaches}
+                </p>
+                <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Coaches
+                </p>
+              </div>
+            </div>
+          </Card>
         </div>
 
-        {/* Grid de bicis/tapetes */}
+        {/* Contenido principal */}
         {salaSeleccionada && (
           <Card>
             {spots.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-lg font-semibold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  No hay {getNombreSpotPlural(salaSeleccionada.tipo)} en esta sala
+                  No hay spots en esta sala
                 </p>
                 <p className="text-sm opacity-70 mb-6" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Comienza agregando el primer {getNombreSpot(salaSeleccionada.tipo).toLowerCase()}
+                  Comienza agregando {getNombreSpotPlural(salaSeleccionada.tipo)} y coaches
                 </p>
-                <Button onClick={handleAgregarBici}>
-                  <Plus size={20} />
-                  Agregar Primer {getNombreSpot(salaSeleccionada.tipo)}
-                </Button>
+                <div className="flex gap-3 justify-center">
+                  <Button onClick={() => handleAgregarSpot(salaSeleccionada.tipo === 'cycling' ? 'bike' : 'mat')}>
+                    <Plus size={20} />
+                    Agregar {getNombreSpot(salaSeleccionada.tipo)}
+                  </Button>
+                  <Button onClick={() => handleAgregarSpot('coach')} variant="secondary">
+                    <UserPlus size={20} />
+                    Agregar Coach
+                  </Button>
+                </div>
               </div>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-                {spots.map((spot) => {
-                  const Icon = getEstadoIcon(spot.estado)
-                  return (
-                    <div
-                      key={spot.id}
-                      onClick={() => handleOpenEditModal(spot)}
-                      className="aspect-square rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105"
-                      style={{
-                        background: `${getEstadoColor(spot.estado)}20`,
-                        border: `2px solid ${getEstadoColor(spot.estado)}40`
-                      }}
-                    >
-                      <Icon size={24} style={{ color: getEstadoColor(spot.estado) }} />
-                      <p className="text-2xl font-bold mt-2" style={{ color: getEstadoColor(spot.estado), fontFamily: 'Montserrat, sans-serif' }}>
-                        {spot.numero}
-                      </p>
-                      <p className="text-xs opacity-70 text-center" style={{ color: getEstadoColor(spot.estado), fontFamily: 'Montserrat, sans-serif' }}>
-                        {getEstadoLabel(spot.estado)}
+              <>
+                {vistaActual === 'layout' ? (
+                  <div className="space-y-4">
+                    {/* Grid layout */}
+                    <div className="space-y-2">
+                      {renderGridLayout()}
+                    </div>
+
+                    {/* Leyenda */}
+                    <div className="flex flex-wrap gap-4 p-4 rounded-xl" style={{ background: 'rgba(156, 122, 94, 0.1)', border: '1px solid rgba(156, 122, 94, 0.3)' }}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded" style={{ background: 'rgba(174, 63, 33, 0.4)' }} />
+                        <span className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>Coach</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded" style={{ background: 'rgba(16, 185, 129, 0.4)' }} />
+                        <span className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>Disponible</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded" style={{ background: 'rgba(245, 158, 11, 0.4)' }} />
+                        <span className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>Mantenimiento</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded" style={{ background: 'rgba(239, 68, 68, 0.4)' }} />
+                        <span className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>Reparación</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded" style={{ background: 'rgba(107, 114, 128, 0.4)' }} />
+                        <span className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>Inactivo</span>
+                      </div>
+                    </div>
+
+                    {/* Instrucciones */}
+                    <div className="p-4 rounded-xl" style={{ background: 'rgba(156, 122, 94, 0.1)', border: '1px solid rgba(156, 122, 94, 0.3)' }}>
+                      <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                        💡 <strong>Instrucciones:</strong> Arrastra los spots para reorganizar el layout según la distribución física del estudio. 
+                        Haz click en cualquiera para editar su estado o eliminarla.
                       </p>
                     </div>
-                  )
-                })}
-              </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                    {spots.map((spot) => {
+                      const Icon = getEstadoIcon(spot.tipo, spot.estado)
+                      const color = getEstadoColor(spot.estado, spot.tipo)
+                      const isCoach = spot.tipo === 'coach'
+                      
+                      return (
+                        <div
+                          key={spot.id}
+                          onClick={() => handleOpenEditModal(spot)}
+                          className="aspect-square rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105"
+                          style={{
+                            background: isCoach ? 'rgba(174, 63, 33, 0.2)' : `${color}20`,
+                            border: `2px solid ${isCoach ? 'rgba(174, 63, 33, 0.6)' : `${color}40`}`
+                          }}
+                        >
+                          <Icon size={24} style={{ color }} />
+                          {isCoach ? (
+                            <p className="text-sm font-bold mt-2 text-center" style={{ color, fontFamily: 'Montserrat, sans-serif' }}>
+                              COACH
+                            </p>
+                          ) : (
+                            <>
+                              <p className="text-2xl font-bold mt-2" style={{ color, fontFamily: 'Montserrat, sans-serif' }}>
+                                {spot.numero}
+                              </p>
+                              <p className="text-xs opacity-70 text-center" style={{ color, fontFamily: 'Montserrat, sans-serif' }}>
+                                {getEstadoLabel(spot.estado)}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </Card>
         )}
@@ -412,20 +695,17 @@ export default function LayoutEstudioPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-2xl font-bold mb-6" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              Editar {getNombreSpot(salaSeleccionada?.tipo)} #{spotEditando.numero}
+              Editar {spotEditando.tipo === 'coach' ? 'Coach' : `${getTipoLabel(spotEditando.tipo)} #${spotEditando.numero}`}
             </h2>
 
             <form onSubmit={handleUpdateSpot} className="space-y-5">
               <div className="space-y-2">
                 <label className="block text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Número
+                  Tipo *
                 </label>
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  value={formData.numero}
-                  onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
+                <select
+                  value={formData.tipo}
+                  onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all"
                   style={{
                     background: 'rgba(255, 252, 243, 0.05)',
@@ -433,8 +713,34 @@ export default function LayoutEstudioPage() {
                     color: '#FFFCF3',
                     fontFamily: 'Montserrat, sans-serif'
                   }}
-                />
+                >
+                  <option value="bike" style={{ background: '#353535' }}>🚴 Bici</option>
+                  <option value="mat" style={{ background: '#353535' }}>🧘 Tapete</option>
+                  <option value="coach" style={{ background: '#353535' }}>👨‍🏫 Coach</option>
+                </select>
               </div>
+
+              {formData.tipo !== 'coach' && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                    Número
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={formData.numero}
+                    onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all"
+                    style={{
+                      background: 'rgba(255, 252, 243, 0.05)',
+                      borderColor: 'rgba(156, 122, 94, 0.3)',
+                      color: '#FFFCF3',
+                      fontFamily: 'Montserrat, sans-serif'
+                    }}
+                  />
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className="block text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
@@ -480,7 +786,7 @@ export default function LayoutEstudioPage() {
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => handleEliminarBici(spotEditando.id)}
+                  onClick={() => handleEliminarSpot(spotEditando.id)}
                   className="flex-1 py-3 px-6 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-80"
                   style={{
                     background: 'rgba(239, 68, 68, 0.2)',
