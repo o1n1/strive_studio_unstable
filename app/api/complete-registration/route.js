@@ -1,8 +1,47 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
+// 🛡️ RATE LIMITING - Protección contra spam
+const rateLimitMap = new Map()
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000 // 15 minutos
+const MAX_ATTEMPTS = 5
+
+// Limpiar registros viejos cada hora
+setInterval(() => {
+  const now = Date.now()
+  for (const [ip, data] of rateLimitMap.entries()) {
+    if (now - data.firstAttempt > RATE_LIMIT_WINDOW) {
+      rateLimitMap.delete(ip)
+    }
+  }
+}, 60 * 60 * 1000)
+
 export async function POST(request) {
   console.log('🔵 Endpoint /api/complete-registration llamado')
+
+  // 🛡️ VALIDACIÓN DE RATE LIMITING
+  const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+  const now = Date.now()
+  
+  if (!rateLimitMap.has(ip)) {
+    rateLimitMap.set(ip, { count: 1, firstAttempt: now })
+  } else {
+    const ipData = rateLimitMap.get(ip)
+    
+    if (now - ipData.firstAttempt < RATE_LIMIT_WINDOW) {
+      ipData.count++
+      
+      if (ipData.count > MAX_ATTEMPTS) {
+        console.warn(`⚠️ Rate limit excedido para IP: ${ip}`)
+        return NextResponse.json(
+          { success: false, error: 'Demasiados intentos. Intenta en 15 minutos.' },
+          { status: 429 }
+        )
+      }
+    } else {
+      rateLimitMap.set(ip, { count: 1, firstAttempt: now })
+    }
+  }
 
   try {
     // Validar Content-Type
