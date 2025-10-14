@@ -1,29 +1,27 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Building2, Edit2, Power, PowerOff, Loader2 } from 'lucide-react'
+import { Plus, Edit2, Trash2, Loader2, RefreshCw, AlertCircle, CheckCircle, Wrench, Power } from 'lucide-react'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
-import Input from '@/components/ui/Input'
 import { useProtectedRoute } from '@/hooks/useProtectedRoute'
 import { supabase } from '@/lib/supabase/client'
 import DashboardSkeleton from '@/components/skeletons/DashboardSkeleton'
 
-export default function AdminSalasPage() {
+export default function LayoutEstudioPage() {
   const { isAuthorized, loading: authLoading } = useProtectedRoute('admin')
   const [salas, setSalas] = useState([])
+  const [salaSeleccionada, setSalaSeleccionada] = useState(null)
+  const [spots, setSpots] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [editingSala, setEditingSala] = useState(null)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [spotEditando, setSpotEditando] = useState(null)
   const [formData, setFormData] = useState({
-    nombre: '',
-    capacidad: '',
-    tipo: 'cycling',
-    descripcion: ''
+    numero: '',
+    estado: 'disponible',
+    notas: ''
   })
-  const [errors, setErrors] = useState({})
-  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (isAuthorized) {
@@ -31,15 +29,40 @@ export default function AdminSalasPage() {
     }
   }, [isAuthorized])
 
+  useEffect(() => {
+    if (salaSeleccionada) {
+      fetchSpots()
+      // Suscribirse a cambios en tiempo real
+      const subscription = supabase
+        .channel('spots-changes')
+        .on('postgres_changes', 
+          { event: '*', schema: 'public', table: 'spots', filter: `room_id=eq.${salaSeleccionada.id}` },
+          (payload) => {
+            console.log('Cambio detectado:', payload)
+            fetchSpots() // Recargar spots cuando hay cambios
+          }
+        )
+        .subscribe()
+
+      return () => {
+        subscription.unsubscribe()
+      }
+    }
+  }, [salaSeleccionada])
+
   const fetchSalas = async () => {
     try {
       const { data, error } = await supabase
         .from('rooms')
         .select('*')
+        .eq('activo', true)
         .order('nombre')
 
       if (error) throw error
       setSalas(data || [])
+      if (data && data.length > 0) {
+        setSalaSeleccionada(data[0])
+      }
     } catch (error) {
       console.error('Error al cargar salas:', error)
     } finally {
@@ -47,116 +70,147 @@ export default function AdminSalasPage() {
     }
   }
 
-  const handleOpenModal = (sala = null) => {
-    if (sala) {
-      setEditingSala(sala)
-      setFormData({
-        nombre: sala.nombre,
-        capacidad: sala.capacidad.toString(),
-        tipo: sala.tipo,
-        descripcion: sala.descripcion || ''
-      })
-    } else {
-      setEditingSala(null)
-      setFormData({
-        nombre: '',
-        capacidad: '',
-        tipo: 'cycling',
-        descripcion: ''
-      })
-    }
-    setErrors({})
-    setShowModal(true)
-  }
-
-  const handleCloseModal = () => {
-    setShowModal(false)
-    setEditingSala(null)
-    setFormData({
-      nombre: '',
-      capacidad: '',
-      tipo: 'cycling',
-      descripcion: ''
-    })
-    setErrors({})
-  }
-
-  const validateForm = () => {
-    const newErrors = {}
-
-    if (!formData.nombre.trim()) {
-      newErrors.nombre = 'El nombre es requerido'
-    }
-
-    if (!formData.capacidad) {
-      newErrors.capacidad = 'La capacidad es requerida'
-    } else if (parseInt(formData.capacidad) < 1) {
-      newErrors.capacidad = 'La capacidad debe ser mayor a 0'
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-
-    if (!validateForm()) return
-
-    setSubmitting(true)
-
+  const fetchSpots = async () => {
+    if (!salaSeleccionada) return
+    
     try {
-      const salaData = {
-        nombre: formData.nombre.trim(),
-        capacidad: parseInt(formData.capacidad),
-        tipo: formData.tipo,
-        descripcion: formData.descripcion.trim() || null,
-        updated_at: new Date().toISOString()
-      }
-
-      if (editingSala) {
-        const { error } = await supabase
-          .from('rooms')
-          .update(salaData)
-          .eq('id', editingSala.id)
-
-        if (error) throw error
-      } else {
-        const { error } = await supabase
-          .from('rooms')
-          .insert([salaData])
-
-        if (error) throw error
-      }
-
-      await fetchSalas()
-      handleCloseModal()
-    } catch (error) {
-      console.error('Error al guardar sala:', error)
-      setErrors({ general: 'Error al guardar la sala. Intenta de nuevo.' })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const toggleSalaEstado = async (sala) => {
-    try {
-      const { error } = await supabase
-        .from('rooms')
-        .update({ 
-          activo: !sala.activo,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', sala.id)
+      const { data, error } = await supabase
+        .from('spots')
+        .select('*')
+        .eq('room_id', salaSeleccionada.id)
+        .order('numero')
 
       if (error) throw error
-      await fetchSalas()
+      setSpots(data || [])
     } catch (error) {
-      console.error('Error al cambiar estado:', error)
+      console.error('Error al cargar spots:', error)
     }
   }
 
-  if (authLoading) {
+  const handleOpenEditModal = (spot) => {
+    setSpotEditando(spot)
+    setFormData({
+      numero: spot.numero.toString(),
+      estado: spot.estado,
+      notas: spot.notas || ''
+    })
+    setShowEditModal(true)
+  }
+
+  const handleCloseEditModal = () => {
+    setShowEditModal(false)
+    setSpotEditando(null)
+    setFormData({
+      numero: '',
+      estado: 'disponible',
+      notas: ''
+    })
+  }
+
+  const handleUpdateSpot = async (e) => {
+    e.preventDefault()
+    if (!spotEditando) return
+
+    try {
+      const { error } = await supabase
+        .from('spots')
+        .update({
+          numero: parseInt(formData.numero),
+          estado: formData.estado,
+          notas: formData.notas,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', spotEditando.id)
+
+      if (error) throw error
+      
+      handleCloseEditModal()
+      // fetchSpots() se llamará automáticamente por la suscripción en tiempo real
+    } catch (error) {
+      console.error('Error al actualizar spot:', error)
+      alert('Error al actualizar la bici')
+    }
+  }
+
+  const handleAgregarBici = async () => {
+    if (!salaSeleccionada) return
+
+    try {
+      // Obtener el siguiente número disponible
+      const maxNumero = spots.length > 0 ? Math.max(...spots.map(s => s.numero)) : 0
+      
+      const { error } = await supabase
+        .from('spots')
+        .insert({
+          room_id: salaSeleccionada.id,
+          numero: maxNumero + 1,
+          tipo: salaSeleccionada.tipo === 'cycling' ? 'bike' : 'position',
+          estado: 'disponible'
+        })
+
+      if (error) throw error
+    } catch (error) {
+      console.error('Error al agregar bici:', error)
+      alert('Error al agregar bici')
+    }
+  }
+
+  const handleEliminarBici = async (spotId) => {
+    if (!confirm('¿Estás seguro de eliminar esta bici? Esta acción no se puede deshacer.')) return
+
+    try {
+      const { error } = await supabase
+        .from('spots')
+        .delete()
+        .eq('id', spotId)
+
+      if (error) throw error
+    } catch (error) {
+      console.error('Error al eliminar bici:', error)
+      alert('Error al eliminar bici')
+    }
+  }
+
+  const getEstadoColor = (estado) => {
+    switch (estado) {
+      case 'disponible': return '#10b981'
+      case 'mantenimiento': return '#f59e0b'
+      case 'reparacion': return '#ef4444'
+      case 'inactivo': return '#6b7280'
+      default: return '#9C7A5E'
+    }
+  }
+
+  const getEstadoIcon = (estado) => {
+    switch (estado) {
+      case 'disponible': return CheckCircle
+      case 'mantenimiento': return Wrench
+      case 'reparacion': return AlertCircle
+      case 'inactivo': return Power
+      default: return CheckCircle
+    }
+  }
+
+  const getEstadoLabel = (estado) => {
+    switch (estado) {
+      case 'disponible': return 'Disponible'
+      case 'mantenimiento': return 'Mantenimiento'
+      case 'reparacion': return 'Reparación'
+      case 'inactivo': return 'Inactiva'
+      default: return estado
+    }
+  }
+
+  // Calcular estadísticas
+  const stats = {
+    total: spots.length,
+    disponibles: spots.filter(s => s.estado === 'disponible').length,
+    mantenimiento: spots.filter(s => s.estado === 'mantenimiento').length,
+    reparacion: spots.filter(s => s.estado === 'reparacion').length,
+    inactivas: spots.filter(s => s.estado === 'inactivo').length
+  }
+
+  if (authLoading || loading) {
     return <DashboardSkeleton />
   }
 
@@ -164,244 +218,189 @@ export default function AdminSalasPage() {
     return null
   }
 
-  const tiposSala = [
-    { value: 'cycling', label: 'Cycling' },
-    { value: 'funcional', label: 'Funcional' },
-    { value: 'yoga', label: 'Yoga' },
-    { value: 'multiuso', label: 'Multiuso' }
-  ]
-
   return (
     <DashboardLayout>
-      <div className="space-y-5 sm:space-y-6 md:space-y-8">
+      <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              Gestión de Salas
+            <h1 className="text-3xl font-bold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              Layout del Estudio
             </h1>
-            <p className="text-xs sm:text-sm opacity-70 mt-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-              Administra las salas de tu estudio
+            <p className="text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+              Gestiona la disponibilidad y estado de todas las bicis
             </p>
           </div>
-          <Button onClick={() => handleOpenModal()} className="w-full sm:w-auto">
+          <Button onClick={handleAgregarBici} disabled={!salaSeleccionada}>
             <Plus size={20} />
-            Nueva Sala
+            Agregar Bici
           </Button>
         </div>
 
-        {/* Lista de Salas */}
-        {loading ? (
-          <Card>
-            <div className="flex items-center justify-center py-12">
-              <Loader2 size={32} className="animate-spin" style={{ color: '#AE3F21' }} />
-            </div>
-          </Card>
-        ) : salas.length === 0 ? (
-          <Card>
-            <div className="text-center py-10 sm:py-12">
-              <Building2 size={40} className="sm:w-12 sm:h-12 mx-auto mb-4 opacity-30" style={{ color: '#B39A72' }} />
-              <p className="text-base sm:text-lg font-semibold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                No hay salas registradas
-              </p>
-              <p className="text-xs sm:text-sm opacity-70 mb-5 sm:mb-6" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                Crea tu primera sala para comenzar
-              </p>
-              <Button onClick={() => handleOpenModal()} className="w-full sm:w-auto">
-                <Plus size={20} />
-                Crear Primera Sala
-              </Button>
-            </div>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
+        {/* Selector de sala */}
+        {salas.length > 0 && (
+          <div className="flex gap-3 overflow-x-auto pb-2">
             {salas.map((sala) => (
-              <Card key={sala.id}>
-                <div className="space-y-3 sm:space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div 
-                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-                        style={{ 
-                          background: sala.activo ? 'rgba(174, 63, 33, 0.2)' : 'rgba(156, 122, 94, 0.2)'
-                        }}
-                      >
-                        <Building2 
-                          size={20}
-                          className="sm:w-6 sm:h-6"
-                          style={{ color: sala.activo ? '#AE3F21' : '#9C7A5E' }} 
-                        />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-bold text-base sm:text-lg truncate" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                          {sala.nombre}
-                        </h3>
-                        <p className="text-xs opacity-60" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                          {tiposSala.find(t => t.value === sala.tipo)?.label}
-                        </p>
-                      </div>
-                    </div>
-                    <span 
-                      className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${
-                        sala.activo ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
-                      }`}
-                      style={{ fontFamily: 'Montserrat, sans-serif' }}
-                    >
-                      {sala.activo ? 'Activa' : 'Inactiva'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between py-2 sm:py-3 px-3 sm:px-4 rounded-lg"
-                    style={{ background: 'rgba(174, 63, 33, 0.1)' }}>
-                    <span className="text-xs sm:text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                      Capacidad
-                    </span>
-                    <span className="font-bold text-base sm:text-lg" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
-                      {sala.capacidad}
-                    </span>
-                  </div>
-
-                  {sala.descripcion && (
-                    <p className="text-xs sm:text-sm opacity-70 line-clamp-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                      {sala.descripcion}
-                    </p>
-                  )}
-
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      onClick={() => handleOpenModal(sala)}
-                      className="flex-1 py-2 px-3 sm:px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-80 text-xs sm:text-sm"
-                      style={{
-                        background: 'rgba(174, 63, 33, 0.2)',
-                        color: '#AE3F21',
-                        fontFamily: 'Montserrat, sans-serif'
-                      }}
-                    >
-                      <Edit2 size={14} className="sm:w-4 sm:h-4" />
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => toggleSalaEstado(sala)}
-                      className="flex-1 py-2 px-3 sm:px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-80 text-xs sm:text-sm"
-                      style={{
-                        background: sala.activo ? 'rgba(156, 122, 94, 0.2)' : 'rgba(174, 63, 33, 0.2)',
-                        color: sala.activo ? '#9C7A5E' : '#AE3F21',
-                        fontFamily: 'Montserrat, sans-serif'
-                      }}
-                    >
-                      {sala.activo ? <PowerOff size={14} className="sm:w-4 sm:h-4" /> : <Power size={14} className="sm:w-4 sm:h-4" />}
-                      <span className="hidden sm:inline">{sala.activo ? 'Desactivar' : 'Activar'}</span>
-                    </button>
-                  </div>
-                </div>
-              </Card>
+              <button
+                key={sala.id}
+                onClick={() => setSalaSeleccionada(sala)}
+                className="px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all"
+                style={{
+                  background: salaSeleccionada?.id === sala.id ? '#AE3F21' : 'rgba(156, 122, 94, 0.2)',
+                  color: salaSeleccionada?.id === sala.id ? '#FFFCF3' : '#B39A72',
+                  fontFamily: 'Montserrat, sans-serif'
+                }}
+              >
+                {sala.nombre}
+              </button>
             ))}
           </div>
         )}
+
+        {/* Estadísticas */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Card>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                style={{ background: 'rgba(16, 185, 129, 0.2)' }}>
+                <CheckCircle size={20} style={{ color: '#10b981' }} />
+              </div>
+              <div>
+                <p className="text-2xl font-bold" style={{ color: '#10b981', fontFamily: 'Montserrat, sans-serif' }}>
+                  {stats.disponibles}
+                </p>
+                <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Disponibles
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                style={{ background: 'rgba(245, 158, 11, 0.2)' }}>
+                <Wrench size={20} style={{ color: '#f59e0b' }} />
+              </div>
+              <div>
+                <p className="text-2xl font-bold" style={{ color: '#f59e0b', fontFamily: 'Montserrat, sans-serif' }}>
+                  {stats.mantenimiento}
+                </p>
+                <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Mantenimiento
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                style={{ background: 'rgba(239, 68, 68, 0.2)' }}>
+                <AlertCircle size={20} style={{ color: '#ef4444' }} />
+              </div>
+              <div>
+                <p className="text-2xl font-bold" style={{ color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
+                  {stats.reparacion}
+                </p>
+                <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Reparación
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                style={{ background: 'rgba(107, 114, 128, 0.2)' }}>
+                <Power size={20} style={{ color: '#6b7280' }} />
+              </div>
+              <div>
+                <p className="text-2xl font-bold" style={{ color: '#6b7280', fontFamily: 'Montserrat, sans-serif' }}>
+                  {stats.inactivas}
+                </p>
+                <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Inactivas
+                </p>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Grid de bicis */}
+        {salaSeleccionada && (
+          <Card>
+            {spots.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-lg font-semibold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                  No hay bicis en esta sala
+                </p>
+                <p className="text-sm opacity-70 mb-6" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Comienza agregando la primera bici
+                </p>
+                <Button onClick={handleAgregarBici}>
+                  <Plus size={20} />
+                  Agregar Primera Bici
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                {spots.map((spot) => {
+                  const Icon = getEstadoIcon(spot.estado)
+                  return (
+                    <div
+                      key={spot.id}
+                      onClick={() => handleOpenEditModal(spot)}
+                      className="aspect-square rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105"
+                      style={{
+                        background: `${getEstadoColor(spot.estado)}20`,
+                        border: `2px solid ${getEstadoColor(spot.estado)}40`
+                      }}
+                    >
+                      <Icon size={24} style={{ color: getEstadoColor(spot.estado) }} />
+                      <p className="text-2xl font-bold mt-2" style={{ color: getEstadoColor(spot.estado), fontFamily: 'Montserrat, sans-serif' }}>
+                        {spot.numero}
+                      </p>
+                      <p className="text-xs opacity-70 text-center" style={{ color: getEstadoColor(spot.estado), fontFamily: 'Montserrat, sans-serif' }}>
+                        {getEstadoLabel(spot.estado)}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </Card>
+        )}
       </div>
 
-      {/* Modal de Crear/Editar */}
-      {showModal && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0, 0, 0, 0.8)' }}
-          onClick={handleCloseModal}
-        >
+      {/* Modal de edición */}
+      {showEditModal && spotEditando && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={handleCloseEditModal}>
           <div 
-            className="w-full max-w-md backdrop-blur-xl rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-7 shadow-2xl animate-scaleIn max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-md backdrop-blur-xl rounded-2xl p-6 shadow-2xl"
             style={{ 
               background: 'rgba(53, 53, 53, 0.95)',
               border: '1px solid rgba(156, 122, 94, 0.3)'
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-xl sm:text-2xl font-bold mb-5 sm:mb-6" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              {editingSala ? 'Editar Sala' : 'Nueva Sala'}
+            <h2 className="text-2xl font-bold mb-6" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              Editar Bici #{spotEditando.numero}
             </h2>
 
-            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-              {errors.general && (
-                <div className="p-3 sm:p-4 rounded-xl" 
-                  style={{ background: 'rgba(174, 63, 33, 0.1)', border: '1px solid rgba(174, 63, 33, 0.3)' }}>
-                  <p className="text-xs sm:text-sm" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
-                    {errors.general}
-                  </p>
-                </div>
-              )}
-
-              <Input
-                label="Nombre de la Sala"
-                icon={Building2}
-                required
-                value={formData.nombre}
-                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                placeholder="Ej: Sala Cycling 1"
-                error={errors.nombre}
-                disabled={submitting}
-              />
-
+            <form onSubmit={handleUpdateSpot} className="space-y-5">
               <div className="space-y-2">
-                <label className="block text-xs sm:text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Tipo de Sala *
-                </label>
-                <select
-                  value={formData.tipo}
-                  onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
-                  disabled={submitting}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all text-sm sm:text-base"
-                  style={{
-                    background: 'rgba(255, 252, 243, 0.05)',
-                    borderColor: 'rgba(156, 122, 94, 0.3)',
-                    color: '#FFFCF3',
-                    fontFamily: 'Montserrat, sans-serif'
-                  }}
-                >
-                  {tiposSala.map((tipo) => (
-                    <option key={tipo.value} value={tipo.value} style={{ background: '#353535' }}>
-                      {tipo.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-xs sm:text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Capacidad *
+                <label className="block text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                  Número de Bici
                 </label>
                 <input
                   type="number"
                   min="1"
                   required
-                  value={formData.capacidad}
-                  onChange={(e) => setFormData({ ...formData, capacidad: e.target.value })}
-                  disabled={submitting}
-                  placeholder="Número de personas"
-                  className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all text-sm sm:text-base"
-                  style={{
-                    background: 'rgba(255, 252, 243, 0.05)',
-                    borderColor: errors.capacidad ? '#AE3F21' : 'rgba(156, 122, 94, 0.3)',
-                    color: '#FFFCF3',
-                    fontFamily: 'Montserrat, sans-serif'
-                  }}
-                />
-                {errors.capacidad && (
-                  <p className="text-xs mt-1" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
-                    {errors.capacidad}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-xs sm:text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Descripción (opcional)
-                </label>
-                <textarea
-                  value={formData.descripcion}
-                  onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                  disabled={submitting}
-                  placeholder="Describe las características de la sala..."
-                  rows="3"
-                  className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all resize-none text-sm sm:text-base"
+                  value={formData.numero}
+                  onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all"
                   style={{
                     background: 'rgba(255, 252, 243, 0.05)',
                     borderColor: 'rgba(156, 122, 94, 0.3)',
@@ -411,38 +410,71 @@ export default function AdminSalasPage() {
                 />
               </div>
 
-              <div className="flex gap-2 sm:gap-3 pt-3 sm:pt-4">
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  disabled={submitting}
-                  className="flex-1 py-2 sm:py-3 px-4 sm:px-6 rounded-xl font-semibold transition-all hover:opacity-80 disabled:opacity-50 text-sm sm:text-base"
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                  Estado *
+                </label>
+                <select
+                  value={formData.estado}
+                  onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all"
                   style={{
-                    background: 'rgba(156, 122, 94, 0.2)',
-                    color: '#B39A72',
+                    background: 'rgba(255, 252, 243, 0.05)',
+                    borderColor: 'rgba(156, 122, 94, 0.3)',
+                    color: '#FFFCF3',
                     fontFamily: 'Montserrat, sans-serif'
                   }}
                 >
-                  Cancelar
+                  <option value="disponible" style={{ background: '#353535' }}>🟢 Disponible</option>
+                  <option value="mantenimiento" style={{ background: '#353535' }}>🟡 Mantenimiento</option>
+                  <option value="reparacion" style={{ background: '#353535' }}>🔴 Reparación</option>
+                  <option value="inactivo" style={{ background: '#353535' }}>⚫ Inactiva</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                  Notas (opcional)
+                </label>
+                <textarea
+                  value={formData.notas}
+                  onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
+                  placeholder="Ej: Necesita ajuste de asiento"
+                  rows={3}
+                  className="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all resize-none"
+                  style={{
+                    background: 'rgba(255, 252, 243, 0.05)',
+                    borderColor: 'rgba(156, 122, 94, 0.3)',
+                    color: '#FFFCF3',
+                    fontFamily: 'Montserrat, sans-serif'
+                  }}
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => handleEliminarBici(spotEditando.id)}
+                  className="flex-1 py-3 px-6 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-80"
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.2)',
+                    color: '#ef4444',
+                    fontFamily: 'Montserrat, sans-serif'
+                  }}
+                >
+                  <Trash2 size={18} />
+                  Eliminar
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="flex-1 py-2 sm:py-3 px-4 sm:px-6 rounded-xl font-semibold transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
+                  className="flex-1 py-3 px-6 rounded-xl font-semibold transition-all hover:opacity-90"
                   style={{
                     background: '#AE3F21',
                     color: '#FFFCF3',
                     fontFamily: 'Montserrat, sans-serif'
                   }}
                 >
-                  {submitting ? (
-                    <>
-                      <Loader2 size={16} className="sm:w-5 sm:h-5 animate-spin" />
-                      Guardando...
-                    </>
-                  ) : (
-                    editingSala ? 'Actualizar' : 'Crear Sala'
-                  )}
+                  Guardar Cambios
                 </button>
               </div>
             </form>
