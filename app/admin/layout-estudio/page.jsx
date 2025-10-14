@@ -144,8 +144,18 @@ export default function LayoutEstudioPage() {
         updated_at: new Date().toISOString()
       }
 
-      // Solo actualizar número si no es coach
-      if (formData.tipo !== 'coach') {
+      // Manejar el número según el tipo
+      if (formData.tipo === 'coach') {
+        // Si se está convirtiendo a coach y no tiene número negativo, asignar uno
+        if (!spotEditando.numero || spotEditando.numero > 0) {
+          const coachSpots = spots.filter(s => s.tipo === 'coach' && s.id !== spotEditando.id)
+          const minNumero = coachSpots.length > 0 
+            ? Math.min(...coachSpots.map(s => s.numero)) 
+            : 0
+          updateData.numero = minNumero <= 0 ? minNumero - 1 : -1
+        }
+      } else {
+        // Si no es coach, usar el número del formulario
         updateData.numero = parseInt(formData.numero)
       }
 
@@ -168,9 +178,15 @@ export default function LayoutEstudioPage() {
     if (!salaSeleccionada) return
 
     try {
-      // Si es coach, no asignar número
-      let numero = null
-      if (tipoSpot !== 'coach') {
+      let numero
+      if (tipoSpot === 'coach') {
+        // Para coaches, usar números negativos (-1, -2, -3, etc)
+        const coachSpots = spots.filter(s => s.tipo === 'coach')
+        const minNumero = coachSpots.length > 0 
+          ? Math.min(...coachSpots.map(s => s.numero)) 
+          : 0
+        numero = minNumero <= 0 ? minNumero - 1 : -1
+      } else {
         const maxNumero = spots.filter(s => s.tipo !== 'coach').length > 0 
           ? Math.max(...spots.filter(s => s.tipo !== 'coach').map(s => s.numero)) 
           : 0
