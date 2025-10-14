@@ -1,5 +1,7 @@
 'use client'
 
+import Navbar from '@/components/ui/Navbar'
+
 export default function DashboardLayout({ children }) {
   return (
     <div 
@@ -25,8 +27,9 @@ export default function DashboardLayout({ children }) {
         />
       </div>
 
-      {/* Container con ancho máximo responsive */}
+      {/* Container centrado con ancho máximo */}
       <div className="relative z-10 w-full max-w-7xl mx-auto">
+        <Navbar />
         {children}
       </div>
     </div>
