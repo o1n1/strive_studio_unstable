@@ -1,14 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { logger } from '@/lib/utils/logger'
 
 export async function GET(request) {
   const requestUrl = new URL(request.url)
   const token_hash = requestUrl.searchParams.get('token_hash')
   const type = requestUrl.searchParams.get('type')
 
-  console.log('🔵 Endpoint /auth/confirm llamado')
-  console.log('Token hash:', token_hash ? '✅' : '❌')
-  console.log('Type:', type)
+  logger.log('🔵 Endpoint /auth/confirm llamado')
+  logger.log('Token hash:', token_hash ? '✅' : '❌')
+  logger.log('Type:', type)
 
   if (token_hash && type) {
     const supabase = createClient(
@@ -21,24 +22,23 @@ export async function GET(request) {
       token_hash,
     })
 
-    console.log('Verificación OTP:', error ? '❌' : '✅')
+    logger.log('Verificación OTP:', error ? '❌' : '✅')
     
     if (!error) {
-      console.log('✅ Email verificado, redirigiendo...')
-      // Construir URL completa para el redirect
+      logger.success('Email verificado, redirigiendo...')
       const origin = requestUrl.origin
       const redirectUrl = `${origin}/verificacion-exitosa`
-      console.log('Redirecting to:', redirectUrl)
+      logger.log('Redirecting to:', redirectUrl)
       return NextResponse.redirect(redirectUrl)
     } else {
-      console.error('❌ Error verificando OTP:', error)
+      logger.error('❌ Error verificando OTP:', error)
       const origin = requestUrl.origin
       return NextResponse.redirect(`${origin}/?error=${encodeURIComponent(error.message)}`)
     }
   }
 
   // Si no hay token, redirigir al inicio
-  console.log('⚠️ No hay token, redirigiendo al inicio')
+  logger.warn('⚠️ No hay token, redirigiendo al inicio')
   const origin = requestUrl.origin
   return NextResponse.redirect(origin)
 }

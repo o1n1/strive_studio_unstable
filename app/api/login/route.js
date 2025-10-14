@@ -1,11 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { checkRateLimit, clearRateLimit, getClientIP } from '@/lib/utils/rateLimit'
+import { logger } from '@/lib/utils/logger'
 
-const MAX_LOGIN_ATTEMPTS = 10 // Más intentos que registro porque es común equivocarse
+const MAX_LOGIN_ATTEMPTS = 10
 
 export async function POST(request) {
-  console.log('🔵 Endpoint /api/login llamado')
+  logger.log('🔵 Endpoint /api/login llamado')
 
   try {
     const body = await request.json()
@@ -24,14 +25,14 @@ export async function POST(request) {
     const { allowed, remaining } = checkRateLimit(rateLimitKey, MAX_LOGIN_ATTEMPTS)
     
     if (!allowed) {
-      console.warn(`⚠️ Rate limit excedido para: ${rateLimitKey}`)
+      logger.warn(`⚠️ Rate limit excedido para: ${rateLimitKey}`)
       return NextResponse.json(
         { success: false, error: 'Demasiados intentos de inicio de sesión. Intenta en 15 minutos.' },
         { status: 429 }
       )
     }
     
-    console.log(`✅ Rate limit OK - Intentos restantes: ${remaining}`)
+    logger.log(`✅ Rate limit OK - Intentos restantes: ${remaining}`)
 
     // Crear cliente de Supabase
     const supabase = createClient(
@@ -53,7 +54,7 @@ export async function POST(request) {
     })
 
     if (authError) {
-      console.error('❌ Error de login:', authError.message)
+      logger.error('❌ Error de login:', authError.message)
       return NextResponse.json(
         { success: false, error: 'Credenciales incorrectas' },
         { status: 401 }
@@ -75,14 +76,14 @@ export async function POST(request) {
       .single()
 
     if (profileError || !profile) {
-      console.error('❌ Error obteniendo perfil:', profileError)
+      logger.error('❌ Error obteniendo perfil:', profileError)
       return NextResponse.json(
         { success: false, error: 'No se pudo obtener el perfil del usuario' },
         { status: 500 }
       )
     }
 
-    console.log('✅ Login exitoso - Usuario:', authData.user.id, 'Rol:', profile.rol)
+    logger.success('Login exitoso - Usuario:', authData.user.id, 'Rol:', profile.rol)
 
     // Limpiar rate limit en login exitoso
     clearRateLimit(rateLimitKey)
@@ -95,7 +96,7 @@ export async function POST(request) {
     })
 
   } catch (error) {
-    console.error('💥 Error en login:', error)
+    logger.error('💥 Error en login:', error)
     return NextResponse.json(
       { success: false, error: 'Error inesperado al iniciar sesión' },
       { status: 500 }
