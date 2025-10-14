@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Plus, Building2, Edit2, Power, PowerOff, Loader2 } from 'lucide-react'
-import AuthLayout from '@/components/layouts/AuthLayout'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -115,7 +115,6 @@ export default function AdminSalasPage() {
       }
 
       if (editingSala) {
-        // Actualizar sala existente
         const { error } = await supabase
           .from('rooms')
           .update(salaData)
@@ -123,7 +122,6 @@ export default function AdminSalasPage() {
 
         if (error) throw error
       } else {
-        // Crear nueva sala
         const { error } = await supabase
           .from('rooms')
           .insert([salaData])
@@ -174,19 +172,19 @@ export default function AdminSalasPage() {
   ]
 
   return (
-    <AuthLayout>
-      <div className="space-y-6">
+    <DashboardLayout>
+      <div className="space-y-5 sm:space-y-6 md:space-y-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
           <div>
-            <h1 className="text-3xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
               Gestión de Salas
             </h1>
-            <p className="text-sm opacity-70 mt-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+            <p className="text-xs sm:text-sm opacity-70 mt-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
               Administra las salas de tu estudio
             </p>
           </div>
-          <Button onClick={() => handleOpenModal()}>
+          <Button onClick={() => handleOpenModal()} className="w-full sm:w-auto">
             <Plus size={20} />
             Nueva Sala
           </Button>
@@ -201,40 +199,41 @@ export default function AdminSalasPage() {
           </Card>
         ) : salas.length === 0 ? (
           <Card>
-            <div className="text-center py-12">
-              <Building2 size={48} className="mx-auto mb-4 opacity-30" style={{ color: '#B39A72' }} />
-              <p className="text-lg font-semibold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+            <div className="text-center py-10 sm:py-12">
+              <Building2 size={40} className="sm:w-12 sm:h-12 mx-auto mb-4 opacity-30" style={{ color: '#B39A72' }} />
+              <p className="text-base sm:text-lg font-semibold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
                 No hay salas registradas
               </p>
-              <p className="text-sm opacity-70 mb-6" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+              <p className="text-xs sm:text-sm opacity-70 mb-5 sm:mb-6" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
                 Crea tu primera sala para comenzar
               </p>
-              <Button onClick={() => handleOpenModal()}>
+              <Button onClick={() => handleOpenModal()} className="w-full sm:w-auto">
                 <Plus size={20} />
                 Crear Primera Sala
               </Button>
             </div>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
             {salas.map((sala) => (
               <Card key={sala.id}>
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3">
                       <div 
-                        className="w-12 h-12 rounded-xl flex items-center justify-center"
+                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0"
                         style={{ 
                           background: sala.activo ? 'rgba(174, 63, 33, 0.2)' : 'rgba(156, 122, 94, 0.2)'
                         }}
                       >
                         <Building2 
-                          size={24} 
+                          size={20}
+                          className="sm:w-6 sm:h-6"
                           style={{ color: sala.activo ? '#AE3F21' : '#9C7A5E' }} 
                         />
                       </div>
-                      <div>
-                        <h3 className="font-bold text-lg" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-base sm:text-lg truncate" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
                           {sala.nombre}
                         </h3>
                         <p className="text-xs opacity-60" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
@@ -243,7 +242,7 @@ export default function AdminSalasPage() {
                       </div>
                     </div>
                     <span 
-                      className={`text-xs px-2 py-1 rounded-full ${
+                      className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${
                         sala.activo ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
                       }`}
                       style={{ fontFamily: 'Montserrat, sans-serif' }}
@@ -252,18 +251,18 @@ export default function AdminSalasPage() {
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between py-3 px-4 rounded-lg"
+                  <div className="flex items-center justify-between py-2 sm:py-3 px-3 sm:px-4 rounded-lg"
                     style={{ background: 'rgba(174, 63, 33, 0.1)' }}>
-                    <span className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                    <span className="text-xs sm:text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
                       Capacidad
                     </span>
-                    <span className="font-bold text-lg" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
+                    <span className="font-bold text-base sm:text-lg" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
                       {sala.capacidad}
                     </span>
                   </div>
 
                   {sala.descripcion && (
-                    <p className="text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                    <p className="text-xs sm:text-sm opacity-70 line-clamp-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
                       {sala.descripcion}
                     </p>
                   )}
@@ -271,27 +270,27 @@ export default function AdminSalasPage() {
                   <div className="flex gap-2 pt-2">
                     <button
                       onClick={() => handleOpenModal(sala)}
-                      className="flex-1 py-2 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-80"
+                      className="flex-1 py-2 px-3 sm:px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-80 text-xs sm:text-sm"
                       style={{
                         background: 'rgba(174, 63, 33, 0.2)',
                         color: '#AE3F21',
                         fontFamily: 'Montserrat, sans-serif'
                       }}
                     >
-                      <Edit2 size={16} />
+                      <Edit2 size={14} className="sm:w-4 sm:h-4" />
                       Editar
                     </button>
                     <button
                       onClick={() => toggleSalaEstado(sala)}
-                      className="flex-1 py-2 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-80"
+                      className="flex-1 py-2 px-3 sm:px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all hover:opacity-80 text-xs sm:text-sm"
                       style={{
                         background: sala.activo ? 'rgba(156, 122, 94, 0.2)' : 'rgba(174, 63, 33, 0.2)',
                         color: sala.activo ? '#9C7A5E' : '#AE3F21',
                         fontFamily: 'Montserrat, sans-serif'
                       }}
                     >
-                      {sala.activo ? <PowerOff size={16} /> : <Power size={16} />}
-                      {sala.activo ? 'Desactivar' : 'Activar'}
+                      {sala.activo ? <PowerOff size={14} className="sm:w-4 sm:h-4" /> : <Power size={14} className="sm:w-4 sm:h-4" />}
+                      <span className="hidden sm:inline">{sala.activo ? 'Desactivar' : 'Activar'}</span>
                     </button>
                   </div>
                 </div>
@@ -309,22 +308,22 @@ export default function AdminSalasPage() {
           onClick={handleCloseModal}
         >
           <div 
-            className="w-full max-w-md backdrop-blur-xl rounded-3xl p-7 shadow-2xl animate-scaleIn"
+            className="w-full max-w-md backdrop-blur-xl rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-7 shadow-2xl animate-scaleIn max-h-[90vh] overflow-y-auto"
             style={{ 
               background: 'rgba(53, 53, 53, 0.95)',
               border: '1px solid rgba(156, 122, 94, 0.3)'
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-2xl font-bold mb-6" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+            <h2 className="text-xl sm:text-2xl font-bold mb-5 sm:mb-6" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
               {editingSala ? 'Editar Sala' : 'Nueva Sala'}
             </h2>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
               {errors.general && (
-                <div className="p-4 rounded-xl" 
+                <div className="p-3 sm:p-4 rounded-xl" 
                   style={{ background: 'rgba(174, 63, 33, 0.1)', border: '1px solid rgba(174, 63, 33, 0.3)' }}>
-                  <p className="text-sm" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
+                  <p className="text-xs sm:text-sm" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
                     {errors.general}
                   </p>
                 </div>
@@ -342,14 +341,14 @@ export default function AdminSalasPage() {
               />
 
               <div className="space-y-2">
-                <label className="block text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                <label className="block text-xs sm:text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
                   Tipo de Sala *
                 </label>
                 <select
                   value={formData.tipo}
                   onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
                   disabled={submitting}
-                  className="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all text-sm sm:text-base"
                   style={{
                     background: 'rgba(255, 252, 243, 0.05)',
                     borderColor: 'rgba(156, 122, 94, 0.3)',
@@ -366,7 +365,7 @@ export default function AdminSalasPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                <label className="block text-xs sm:text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
                   Capacidad *
                 </label>
                 <input
@@ -377,7 +376,7 @@ export default function AdminSalasPage() {
                   onChange={(e) => setFormData({ ...formData, capacidad: e.target.value })}
                   disabled={submitting}
                   placeholder="Número de personas"
-                  className="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all text-sm sm:text-base"
                   style={{
                     background: 'rgba(255, 252, 243, 0.05)',
                     borderColor: errors.capacidad ? '#AE3F21' : 'rgba(156, 122, 94, 0.3)',
@@ -393,7 +392,7 @@ export default function AdminSalasPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                <label className="block text-xs sm:text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
                   Descripción (opcional)
                 </label>
                 <textarea
@@ -402,7 +401,7 @@ export default function AdminSalasPage() {
                   disabled={submitting}
                   placeholder="Describe las características de la sala..."
                   rows="3"
-                  className="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all resize-none"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all resize-none text-sm sm:text-base"
                   style={{
                     background: 'rgba(255, 252, 243, 0.05)',
                     borderColor: 'rgba(156, 122, 94, 0.3)',
@@ -412,12 +411,12 @@ export default function AdminSalasPage() {
                 />
               </div>
 
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-2 sm:gap-3 pt-3 sm:pt-4">
                 <button
                   type="button"
                   onClick={handleCloseModal}
                   disabled={submitting}
-                  className="flex-1 py-3 px-6 rounded-xl font-semibold transition-all hover:opacity-80 disabled:opacity-50"
+                  className="flex-1 py-2 sm:py-3 px-4 sm:px-6 rounded-xl font-semibold transition-all hover:opacity-80 disabled:opacity-50 text-sm sm:text-base"
                   style={{
                     background: 'rgba(156, 122, 94, 0.2)',
                     color: '#B39A72',
@@ -429,7 +428,7 @@ export default function AdminSalasPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 py-3 px-6 rounded-xl font-semibold transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 py-2 sm:py-3 px-4 sm:px-6 rounded-xl font-semibold transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
                   style={{
                     background: '#AE3F21',
                     color: '#FFFCF3',
@@ -438,7 +437,7 @@ export default function AdminSalasPage() {
                 >
                   {submitting ? (
                     <>
-                      <Loader2 size={18} className="animate-spin" />
+                      <Loader2 size={16} className="sm:w-5 sm:h-5 animate-spin" />
                       Guardando...
                     </>
                   ) : (
@@ -450,6 +449,6 @@ export default function AdminSalasPage() {
           </div>
         </div>
       )}
-    </AuthLayout>
+    </DashboardLayout>
   )
 }
