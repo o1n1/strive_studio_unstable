@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Lock, Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 
 export default function PasswordInput({ 
   label = 'Contraseña',
@@ -42,17 +42,11 @@ export default function PasswordInput({
       </label>
       
       <div className="relative">
-        <Lock 
-          size={20} 
-          className="absolute left-4 top-1/2 -translate-y-1/2 opacity-50" 
-          style={{ color: error ? '#AE3F21' : '#B39A72' }} 
-        />
-        
         <input
           {...props}
           type={showPassword ? 'text' : 'password'}
           onChange={handleChange}
-          className="w-full pl-12 pr-12 py-3.5 rounded-xl focus:outline-none transition-all"
+          className="w-full px-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all"
           style={{ 
             backgroundColor: 'rgba(0, 0, 0, 0.3)', 
             border: `1px solid ${error ? '#AE3F21' : 'rgba(156, 122, 94, 0.3)'}`,
@@ -79,13 +73,19 @@ export default function PasswordInput({
         </button>
       </div>
 
+      {error && (
+        <p className="text-xs mt-1.5" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
+          {error}
+        </p>
+      )}
+
       {showStrength && props.value && (
-        <div className="mt-2 animate-fadeIn">
-          <div className="flex gap-1 mb-1">
+        <div className="mt-2 space-y-1.5">
+          <div className="flex gap-1">
             {[...Array(5)].map((_, i) => (
               <div
                 key={i}
-                className="h-1 flex-1 rounded-full transition-all duration-300"
+                className="h-1 flex-1 rounded-full transition-all"
                 style={{
                   backgroundColor: i < strength ? strengthColors[strength - 1] : 'rgba(156, 122, 94, 0.2)'
                 }}
@@ -93,26 +93,11 @@ export default function PasswordInput({
             ))}
           </div>
           {strength > 0 && (
-            <p className="text-xs mt-1" style={{ 
-              color: strengthColors[strength - 1],
-              fontFamily: 'Montserrat, sans-serif' 
-            }}>
+            <p className="text-xs" style={{ color: strengthColors[strength - 1], fontFamily: 'Montserrat, sans-serif' }}>
               {strengthLabels[strength - 1]}
             </p>
           )}
         </div>
-      )}
-      
-      {error && (
-        <p className="mt-1.5 text-sm flex items-center gap-1 animate-fadeIn" 
-          style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12" y2="12"/>
-            <line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          {error}
-        </p>
       )}
     </div>
   )
