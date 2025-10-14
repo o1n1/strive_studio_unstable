@@ -25,7 +25,7 @@ export default function AdminDashboardPage() {
       ruta: '/admin/layout-estudio',
       icono: 'Building2',
       activo: true
-    }
+    },
     {
       titulo: 'Gestión de Bikes',
       descripcion: 'Administra bikes y spots',
