@@ -8,6 +8,7 @@ import AuthLayout from '@/components/layouts/AuthLayout'
 import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
+import { loginUser } from '@/lib/supabase/auth'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -44,19 +45,8 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      // Llamar al endpoint API de login con rate limiting
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password
-        })
-      })
-
-      const result = await response.json()
+      // Llamar a la función de login
+      const result = await loginUser(formData.email, formData.password)
 
       if (result.success) {
         // Redirigir según el rol del usuario
