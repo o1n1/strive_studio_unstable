@@ -2,10 +2,13 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 export async function GET(request) {
-  const { searchParams } = new URL(request.url)
-  const token_hash = searchParams.get('token_hash')
-  const type = searchParams.get('type')
-  const next = searchParams.get('next') ?? '/'
+  const requestUrl = new URL(request.url)
+  const token_hash = requestUrl.searchParams.get('token_hash')
+  const type = requestUrl.searchParams.get('type')
+
+  console.log('🔵 Endpoint /auth/confirm llamado')
+  console.log('Token hash:', token_hash ? '✅' : '❌')
+  console.log('Type:', type)
 
   if (token_hash && type) {
     const supabase = createClient(
@@ -13,20 +16,29 @@ export async function GET(request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     )
 
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       type,
       token_hash,
     })
 
+    console.log('Verificación OTP:', error ? '❌' : '✅')
+    
     if (!error) {
-      // Email verificado exitosamente - redirigir al dashboard del cliente
-      return NextResponse.redirect(new URL('/verificacion-exitosa', request.url))
+      console.log('✅ Email verificado, redirigiendo...')
+      // Construir URL completa para el redirect
+      const origin = requestUrl.origin
+      const redirectUrl = `${origin}/verificacion-exitosa`
+      console.log('Redirecting to:', redirectUrl)
+      return NextResponse.redirect(redirectUrl)
     } else {
-      // Error en la verificación
-      return NextResponse.redirect(new URL(`/error?message=${error.message}`, request.url))
+      console.error('❌ Error verificando OTP:', error)
+      const origin = requestUrl.origin
+      return NextResponse.redirect(`${origin}/?error=${encodeURIComponent(error.message)}`)
     }
   }
 
   // Si no hay token, redirigir al inicio
-  return NextResponse.redirect(new URL('/', request.url))
+  console.log('⚠️ No hay token, redirigiendo al inicio')
+  const origin = requestUrl.origin
+  return NextResponse.redirect(origin)
 }
