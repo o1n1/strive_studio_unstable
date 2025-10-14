@@ -3,7 +3,7 @@
 import { Shield, LogOut, Building2, Bike, Users, Calendar, Package, Settings } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import AuthLayout from '@/components/layouts/AuthLayout'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import { useProtectedRoute } from '@/hooks/useProtectedRoute'
@@ -75,20 +75,20 @@ export default function AdminDashboardPage() {
   ]
 
   return (
-    <AuthLayout>
-      <div className="space-y-6">
+    <DashboardLayout>
+      <div className="space-y-6 md:space-y-8">
         {/* Header */}
         <Card>
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center"
+          <div className="text-center space-y-3 sm:space-y-4">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full flex items-center justify-center"
               style={{ background: 'rgba(174, 63, 33, 0.2)' }}>
-              <Shield size={32} style={{ color: '#AE3F21' }} />
+              <Shield size={28} className="sm:w-8 sm:h-8" style={{ color: '#AE3F21' }} />
             </div>
             <div>
-              <h2 className="text-2xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
                 Panel de Administración
               </h2>
-              <p className="text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+              <p className="text-xs sm:text-sm opacity-70 mt-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
                 Bienvenido al dashboard de administrador
               </p>
             </div>
@@ -96,24 +96,24 @@ export default function AdminDashboardPage() {
         </Card>
 
         {/* Grid de Módulos */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
           {modulos.map((modulo, index) => {
             const Icono = modulo.icono
             
             if (modulo.disponible) {
               return (
                 <Link key={index} href={modulo.href}>
-                  <Card>
-                    <div className="space-y-4 transition-all hover:opacity-80 cursor-pointer">
-                      <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                  <Card className="h-full">
+                    <div className="space-y-3 sm:space-y-4 transition-all hover:opacity-80 cursor-pointer">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center"
                         style={{ background: 'rgba(174, 63, 33, 0.2)' }}>
-                        <Icono size={24} style={{ color: '#AE3F21' }} />
+                        <Icono size={20} className="sm:w-6 sm:h-6" style={{ color: '#AE3F21' }} />
                       </div>
                       <div>
-                        <h3 className="font-bold text-lg mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                        <h3 className="font-bold text-base sm:text-lg mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
                           {modulo.titulo}
                         </h3>
-                        <p className="text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                        <p className="text-xs sm:text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
                           {modulo.descripcion}
                         </p>
                       </div>
@@ -123,17 +123,17 @@ export default function AdminDashboardPage() {
               )
             } else {
               return (
-                <Card key={index}>
-                  <div className="space-y-4 opacity-50 cursor-not-allowed">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                <Card key={index} className="h-full">
+                  <div className="space-y-3 sm:space-y-4 opacity-50 cursor-not-allowed">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center"
                       style={{ background: 'rgba(156, 122, 94, 0.2)' }}>
-                      <Icono size={24} style={{ color: '#9C7A5E' }} />
+                      <Icono size={20} className="sm:w-6 sm:h-6" style={{ color: '#9C7A5E' }} />
                     </div>
                     <div>
-                      <h3 className="font-bold text-lg mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                      <h3 className="font-bold text-base sm:text-lg mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
                         {modulo.titulo}
                       </h3>
-                      <p className="text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                      <p className="text-xs sm:text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
                         {modulo.descripcion}
                       </p>
                       <span className="inline-block mt-2 text-xs px-2 py-1 rounded-full" 
@@ -155,13 +155,13 @@ export default function AdminDashboardPage() {
         {/* Botón de Cerrar Sesión */}
         <Card>
           <div className="flex justify-center">
-            <Button variant="secondary" onClick={handleLogout}>
+            <Button variant="secondary" onClick={handleLogout} className="w-full sm:w-auto">
               <LogOut size={18} />
               Cerrar Sesión
             </Button>
           </div>
         </Card>
       </div>
-    </AuthLayout>
+    </DashboardLayout>
   )
 }
