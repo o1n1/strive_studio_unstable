@@ -54,17 +54,35 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const result = await postJSON('/api/login', {
+      // Login directo con Supabase en cliente para persistir sesión
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: formData.email.trim().toLowerCase(),
         password: formData.password
       })
 
-      if (!result.success) {
-        setErrors({ general: result.error || 'Error al iniciar sesión' })
+      if (authError) {
+        setErrors({ general: 'Credenciales incorrectas' })
         return
       }
 
-      const redirectUrl = getRedirectUrl(result.profile.rol)
+      if (!authData.user) {
+        setErrors({ general: 'No se pudo iniciar sesión' })
+        return
+      }
+
+      // Obtener perfil para redirigir
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('rol')
+        .eq('id', authData.user.id)
+        .single()
+
+      if (profileError || !profile) {
+        setErrors({ general: 'Error al obtener perfil de usuario' })
+        return
+      }
+
+      const redirectUrl = getRedirectUrl(profile.rol)
       router.push(redirectUrl)
 
     } catch (error) {
