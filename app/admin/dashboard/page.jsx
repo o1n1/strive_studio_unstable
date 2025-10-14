@@ -7,6 +7,7 @@ import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
 import { useProtectedRoute } from '@/hooks/useProtectedRoute'
 import { logoutUser } from '@/lib/supabase/auth'
+import DashboardSkeleton from '@/components/skeletons/DashboardSkeleton'
 
 export default function AdminDashboardPage() {
   const router = useRouter()
@@ -20,17 +21,7 @@ export default function AdminDashboardPage() {
   }
 
   if (loading) {
-    return (
-      <AuthLayout>
-        <Card>
-          <div className="text-center py-8">
-            <p className="text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-              Cargando...
-            </p>
-          </div>
-        </Card>
-      </AuthLayout>
-    )
+    return <DashboardSkeleton />
   }
 
   if (!isAuthorized) {

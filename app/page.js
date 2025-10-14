@@ -10,6 +10,7 @@ import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
 import { supabase } from '@/lib/supabase/client'
+import { SessionCheckSkeleton } from '@/components/skeletons/AuthSkeleton'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -128,17 +129,7 @@ export default function LoginPage() {
   }
 
   if (checkingSession) {
-    return (
-      <AuthLayout>
-        <Card>
-          <div className="text-center py-8">
-            <p className="text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-              Verificando sesión...
-            </p>
-          </div>
-        </Card>
-      </AuthLayout>
-    )
+    return <SessionCheckSkeleton />
   }
 
   return (
