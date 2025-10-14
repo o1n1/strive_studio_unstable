@@ -1,80 +1,42 @@
 'use client'
-import { useState } from 'react'
-import { Eye, EyeOff } from 'lucide-react'
 
 export default function Input({ 
   label, 
-  icon: Icon, // Aceptamos pero no usamos
+  icon: Icon, 
   error, 
-  required,
   type = 'text',
+  required = false,
+  disabled = false,
   ...props 
 }) {
-  const [showPassword, setShowPassword] = useState(false)
-  const isPassword = type === 'password'
-  const inputType = isPassword && showPassword ? 'text' : type
-
   return (
-    <div className="w-full">
+    <div className="space-y-2">
       {label && (
-        <label className="block text-sm md:text-base font-medium mb-2 md:mb-3 opacity-90" 
-          style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-          {label} 
-          {required && <span style={{ color: '#AE3F21' }}> *</span>}
+        <label className="block text-xs sm:text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+          {label} {required && <span style={{ color: '#AE3F21' }}>*</span>}
         </label>
       )}
-      
       <div className="relative">
+        {Icon && (
+          <div className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 pointer-events-none">
+            <Icon size={18} className="sm:w-5 sm:h-5" style={{ color: error ? '#AE3F21' : '#9C7A5E' }} />
+          </div>
+        )}
         <input
-          {...props}
-          type={inputType}
-          className={`
-            w-full 
-            pl-4 md:pl-5
-            ${isPassword ? 'pr-10 md:pr-12' : 'pr-4 md:pr-5'} 
-            py-3 md:py-4 
-            rounded-xl 
-            focus:outline-none 
-            transition-all 
-            text-sm md:text-base
-          `}
-          style={{ 
-            backgroundColor: 'rgba(0, 0, 0, 0.3)', 
-            border: `1px solid ${error ? '#AE3F21' : 'rgba(156, 122, 94, 0.3)'}`,
+          type={type}
+          disabled={disabled}
+          className={`w-full ${Icon ? 'pl-10 sm:pl-12' : 'pl-3 sm:pl-4'} pr-3 sm:pr-4 py-2 sm:py-3 rounded-xl border focus:outline-none focus:ring-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base`}
+          style={{
+            background: disabled ? 'rgba(255, 252, 243, 0.02)' : 'rgba(255, 252, 243, 0.05)',
+            borderColor: error ? '#AE3F21' : 'rgba(156, 122, 94, 0.3)',
             color: '#FFFCF3',
             fontFamily: 'Montserrat, sans-serif'
           }}
-          onFocus={(e) => {
-            e.target.style.borderColor = error ? '#AE3F21' : '#AE3F21'
-            e.target.style.backgroundColor = 'rgba(0, 0, 0, 0.5)'
-          }}
-          onBlur={(e) => {
-            e.target.style.borderColor = error ? '#AE3F21' : 'rgba(156, 122, 94, 0.3)'
-            e.target.style.backgroundColor = 'rgba(0, 0, 0, 0.3)'
-          }}
+          {...props}
         />
-
-        {isPassword && (
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 opacity-70 hover:opacity-100 transition-opacity z-10 p-1"
-            style={{ color: '#B39A72' }}
-            tabIndex={-1}
-          >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
-        )}
       </div>
-      
       {error && (
-        <p className="mt-2 text-xs md:text-sm flex items-center gap-1.5 animate-fadeIn" 
-          style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12" y2="12"/>
-            <line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
+        <p className="text-xs mt-1 animate-fadeIn" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
           {error}
         </p>
       )}
