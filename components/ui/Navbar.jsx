@@ -44,7 +44,7 @@ export default function Navbar() {
 
   return (
     <nav 
-      className="backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-5 md:p-6 mb-6 sm:mb-8 shadow-xl"
+      className="backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-5 md:p-6 mb-6 sm:mb-8 shadow-xl relative z-50"
       style={{ 
         background: 'rgba(53, 53, 53, 0.8)',
         border: '1px solid rgba(156, 122, 94, 0.3)'
