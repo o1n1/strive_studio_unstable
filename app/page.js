@@ -8,6 +8,7 @@ import AuthLayout from '@/components/layouts/AuthLayout'
 import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
+import { supabase } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -71,6 +72,23 @@ export default function LoginPage() {
         console.log('👤 [DEBUG] Usuario:', result.user?.id)
         console.log('🎭 [DEBUG] Perfil:', result.profile)
         console.log('🎯 [DEBUG] Rol:', result.profile?.rol)
+        
+        // 🔥 CRÍTICO: Establecer la sesión en el cliente de Supabase
+        if (result.session) {
+          console.log('🔐 [DEBUG] Estableciendo sesión en el cliente...')
+          const { data, error } = await supabase.auth.setSession({
+            access_token: result.session.access_token,
+            refresh_token: result.session.refresh_token
+          })
+          
+          if (error) {
+            console.error('❌ [DEBUG] Error estableciendo sesión:', error)
+            setErrors({ general: 'Error al establecer la sesión' })
+            return
+          }
+          
+          console.log('✅ [DEBUG] Sesión establecida correctamente')
+        }
         
         const redirectUrl = getRedirectUrl(result.profile.rol)
         console.log('🔄 [DEBUG] Redirigiendo a:', redirectUrl)
