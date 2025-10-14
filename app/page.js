@@ -8,7 +8,6 @@ import AuthLayout from '@/components/layouts/AuthLayout'
 import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
-import { logger } from '@/lib/utils/logger'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -23,6 +22,8 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    console.log('🔵 [DEBUG] Iniciando handleSubmit')
+    
     const newErrors = {}
 
     if (!formData.email) {
@@ -38,13 +39,17 @@ export default function LoginPage() {
     }
 
     if (Object.keys(newErrors).length > 0) {
+      console.log('❌ [DEBUG] Errores de validación:', newErrors)
       setErrors(newErrors)
       return
     }
 
+    console.log('✅ [DEBUG] Validaciones pasaron, haciendo fetch...')
     setLoading(true)
 
     try {
+      console.log('📡 [DEBUG] Enviando request a /api/login')
+      
       const response = await fetch('/api/login', {
         method: 'POST',
         headers: {
@@ -56,36 +61,63 @@ export default function LoginPage() {
         })
       })
 
+      console.log('📊 [DEBUG] Response status:', response.status)
+      
       const result = await response.json()
+      console.log('📦 [DEBUG] Result completo:', result)
 
       if (result.success) {
+        console.log('✅ [DEBUG] Login exitoso!')
+        console.log('👤 [DEBUG] Usuario:', result.user?.id)
+        console.log('🎭 [DEBUG] Perfil:', result.profile)
+        console.log('🎯 [DEBUG] Rol:', result.profile?.rol)
+        
         const redirectUrl = getRedirectUrl(result.profile.rol)
-        logger.log('🔄 Redirigiendo a dashboard')
+        console.log('🔄 [DEBUG] Redirigiendo a:', redirectUrl)
+        
         router.push(redirectUrl)
+        console.log('✅ [DEBUG] router.push ejecutado')
       } else {
+        console.log('❌ [DEBUG] Login falló:', result.error)
         setErrors({ general: result.error })
       }
     } catch (error) {
-      logger.error('Error en login:', error)
+      console.error('💥 [DEBUG] Error en catch:', error)
+      console.error('💥 [DEBUG] Error completo:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      })
       setErrors({ general: 'Error inesperado. Intenta de nuevo.' })
     } finally {
+      console.log('🏁 [DEBUG] Finally ejecutado, setLoading(false)')
       setLoading(false)
     }
   }
 
   const getRedirectUrl = (rol) => {
+    console.log('🎯 [DEBUG] getRedirectUrl llamado con rol:', rol)
+    
+    let url
     switch (rol) {
       case 'admin':
-        return '/admin/dashboard'
+        url = '/admin/dashboard'
+        break
       case 'coach':
-        return '/coach/clases'
+        url = '/coach/clases'
+        break
       case 'cliente':
-        return '/cliente/reservas'
+        url = '/cliente/reservas'
+        break
       case 'staff':
-        return '/staff/checkin'
+        url = '/staff/checkin'
+        break
       default:
-        return '/cliente/reservas'
+        url = '/cliente/reservas'
     }
+    
+    console.log('🎯 [DEBUG] URL calculada:', url)
+    return url
   }
 
   return (
