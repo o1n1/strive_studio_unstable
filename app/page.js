@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Mail, Lock } from 'lucide-react'
@@ -8,67 +8,67 @@ import AuthLayout from '@/components/layouts/AuthLayout'
 import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
-import { supabase } from '@/lib/supabase/client'
 import { postJSON } from '@/lib/utils/fetchWithTimeout'
+import { supabase } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const router = useRouter()
   const [formData, setFormData] = useState({ email: '', password: '' })
-  const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
+  const [checkingSession, setCheckingSession] = useState(true)
+  const [errors, setErrors] = useState({})
 
-  const validateEmail = (email) => {
-    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    return regex.test(email)
-  }
+  // 🔒 MEJORA #2: Verificar sesión existente al cargar
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (session) {
+          // Obtener perfil para redirigir al dashboard correcto
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('rol')
+            .eq('id', session.user.id)
+            .single()
+          
+          if (profile && !error) {
+            const redirectUrl = getRedirectUrl(profile.rol)
+            router.push(redirectUrl)
+            return
+          }
+        }
+      } catch (error) {
+        console.error('Error verificando sesión:', error)
+      } finally {
+        setCheckingSession(false)
+      }
+    }
+    
+    checkExistingSession()
+  }, [router])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    const newErrors = {}
-
-    if (!formData.email) {
-      newErrors.email = 'El email es requerido'
-    } else if (!validateEmail(formData.email)) {
-      newErrors.email = 'Email inválido'
-    }
-
-    if (!formData.password) {
-      newErrors.password = 'La contraseña es requerida'
-    } else if (formData.password.length < 8) {
-      newErrors.password = 'Mínimo 8 caracteres'
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors)
-      return
-    }
-
+    setErrors({})
     setLoading(true)
 
     try {
-      // Usar postJSON con timeout de 10 segundos
       const result = await postJSON('/api/login', {
-        email: formData.email,
+        email: formData.email.trim().toLowerCase(),
         password: formData.password
       })
 
-      if (result.success) {
-        // Establecer la sesión en el cliente de Supabase
-        if (result.session) {
-          await supabase.auth.setSession({
-            access_token: result.session.access_token,
-            refresh_token: result.session.refresh_token
-          })
-        }
-        
-        const redirectUrl = getRedirectUrl(result.profile.rol)
-        router.push(redirectUrl)
-      } else {
-        setErrors({ general: result.error })
+      if (!result.success) {
+        setErrors({ general: result.error || 'Error al iniciar sesión' })
+        return
       }
+
+      const redirectUrl = getRedirectUrl(result.profile.rol)
+      router.push(redirectUrl)
+
     } catch (error) {
-      // Mensajes específicos según el tipo de error
-      let errorMessage = 'Error inesperado. Intenta de nuevo.'
+      let errorMessage = 'Error al iniciar sesión. Intenta de nuevo.'
       
       if (error.isTimeout) {
         errorMessage = 'La solicitud tardó demasiado. Verifica tu conexión a internet.'
@@ -97,6 +97,21 @@ export default function LoginPage() {
     }
   }
 
+  // Mostrar loading mientras verifica sesión
+  if (checkingSession) {
+    return (
+      <AuthLayout>
+        <Card>
+          <div className="text-center py-8">
+            <p className="text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+              Verificando sesión...
+            </p>
+          </div>
+        </Card>
+      </AuthLayout>
+    )
+  }
+
   return (
     <AuthLayout>
       <Card>
@@ -116,6 +131,7 @@ export default function LoginPage() {
             icon={Mail}
             type="email"
             required
+            disabled={loading}
             value={formData.email}
             onChange={(e) => {
               setFormData({ ...formData, email: e.target.value })
@@ -130,6 +146,7 @@ export default function LoginPage() {
             icon={Lock}
             type="password"
             required
+            disabled={loading}
             value={formData.password}
             onChange={(e) => {
               setFormData({ ...formData, password: e.target.value })
@@ -148,6 +165,7 @@ export default function LoginPage() {
                 type="checkbox" 
                 className="mr-2 rounded" 
                 style={{ accentColor: '#AE3F21' }} 
+                disabled={loading}
               />
               Recordarme
             </label>
@@ -181,7 +199,7 @@ export default function LoginPage() {
           </div>
 
           <Link href="/registro">
-            <Button variant="secondary" type="button">
+            <Button variant="secondary" type="button" disabled={loading}>
               Crear Cuenta Nueva
             </Button>
           </Link>
