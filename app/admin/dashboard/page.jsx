@@ -1,25 +1,14 @@
 'use client'
 
-import { Shield, LogOut, Building2, Bike, Users, Calendar, Package, Settings } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { Shield, Building2, Bike, Users, Calendar, Package, Settings } from 'lucide-react'
 import Link from 'next/link'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
-import Button from '@/components/ui/Button'
 import { useProtectedRoute } from '@/hooks/useProtectedRoute'
-import { logoutUser } from '@/lib/supabase/auth'
 import DashboardSkeleton from '@/components/skeletons/DashboardSkeleton'
 
 export default function AdminDashboardPage() {
-  const router = useRouter()
   const { isAuthorized, loading } = useProtectedRoute('admin')
-
-  const handleLogout = async () => {
-    const result = await logoutUser()
-    if (result.success) {
-      router.push('/')
-    }
-  }
 
   if (loading) {
     return <DashboardSkeleton />
@@ -89,7 +78,7 @@ export default function AdminDashboardPage() {
                 Panel de Administración
               </h2>
               <p className="text-xs sm:text-sm opacity-70 mt-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                Bienvenido al dashboard de administrador
+                Gestiona todos los aspectos de tu estudio
               </p>
             </div>
           </div>
@@ -151,16 +140,6 @@ export default function AdminDashboardPage() {
             }
           })}
         </div>
-
-        {/* Botón de Cerrar Sesión */}
-        <Card>
-          <div className="flex justify-center">
-            <Button variant="secondary" onClick={handleLogout} className="w-full sm:w-auto">
-              <LogOut size={18} />
-              Cerrar Sesión
-            </Button>
-          </div>
-        </Card>
       </div>
     </DashboardLayout>
   )
