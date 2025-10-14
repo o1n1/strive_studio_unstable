@@ -1,24 +1,13 @@
 'use client'
 
-import { Calendar, LogOut } from 'lucide-react'
-import { useRouter } from 'next/navigation'
-import AuthLayout from '@/components/layouts/AuthLayout'
+import { Calendar } from 'lucide-react'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
-import Button from '@/components/ui/Button'
 import { useProtectedRoute } from '@/hooks/useProtectedRoute'
-import { logoutUser } from '@/lib/supabase/auth'
 import DashboardSkeleton from '@/components/skeletons/DashboardSkeleton'
 
 export default function ClienteReservasPage() {
-  const router = useRouter()
   const { isAuthorized, loading } = useProtectedRoute('cliente')
-
-  const handleLogout = async () => {
-    const result = await logoutUser()
-    if (result.success) {
-      router.push('/')
-    }
-  }
 
   if (loading) {
     return <DashboardSkeleton />
@@ -29,7 +18,7 @@ export default function ClienteReservasPage() {
   }
 
   return (
-    <AuthLayout>
+    <DashboardLayout>
       <Card>
         <div className="text-center space-y-6">
           <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center"
@@ -55,15 +44,8 @@ export default function ClienteReservasPage() {
               Esta página está en construcción. Aquí podrás explorar clases, hacer reservas, comprar paquetes y ver tu historial.
             </p>
           </div>
-
-          <div className="pt-4">
-            <Button variant="secondary" onClick={handleLogout}>
-              <LogOut size={18} />
-              Cerrar Sesión
-            </Button>
-          </div>
         </div>
       </Card>
-    </AuthLayout>
+    </DashboardLayout>
   )
 }
