@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { checkRateLimit, getClientIP } from '@/lib/utils/rateLimit'
 import { logger } from '@/lib/utils/logger'
+import { validateEmail, validatePhone } from '@/lib/validations'
 
 const MAX_REGISTRATION_ATTEMPTS = 5
 
@@ -42,6 +43,48 @@ export async function POST(request) {
       logger.error('❌ Faltan campos requeridos')
       return NextResponse.json(
         { success: false, error: 'Faltan campos requeridos' },
+        { status: 400 }
+      )
+    }
+
+    // 🛡️ VALIDACIONES DE FORMATO en backend
+    if (!validateEmail(email)) {
+      logger.error('❌ Email con formato inválido')
+      return NextResponse.json(
+        { success: false, error: 'Formato de email inválido' },
+        { status: 400 }
+      )
+    }
+
+    if (!validatePhone(telefono)) {
+      logger.error('❌ Teléfono con formato inválido')
+      return NextResponse.json(
+        { success: false, error: 'Formato de teléfono inválido (10 dígitos requeridos)' },
+        { status: 400 }
+      )
+    }
+
+    if (!validatePhone(emergenciaTelefono)) {
+      logger.error('❌ Teléfono de emergencia con formato inválido')
+      return NextResponse.json(
+        { success: false, error: 'Formato de teléfono de emergencia inválido (10 dígitos requeridos)' },
+        { status: 400 }
+      )
+    }
+
+    // Validar longitud de strings
+    if (nombre.trim().length < 2 || apellidos.trim().length < 2) {
+      logger.error('❌ Nombre o apellidos muy cortos')
+      return NextResponse.json(
+        { success: false, error: 'Nombre y apellidos deben tener al menos 2 caracteres' },
+        { status: 400 }
+      )
+    }
+
+    if (emergenciaNombre.trim().length < 2) {
+      logger.error('❌ Nombre de emergencia muy corto')
+      return NextResponse.json(
+        { success: false, error: 'Nombre de contacto de emergencia debe tener al menos 2 caracteres' },
         { status: 400 }
       )
     }

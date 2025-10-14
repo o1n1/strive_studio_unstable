@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { checkRateLimit, clearRateLimit, getClientIP } from '@/lib/utils/rateLimit'
 import { logger } from '@/lib/utils/logger'
+import { validateEmail } from '@/lib/validations'
 
 const MAX_LOGIN_ATTEMPTS = 10
 
@@ -12,9 +13,27 @@ export async function POST(request) {
     const body = await request.json()
     const { email, password } = body
 
+    // Validar campos requeridos
     if (!email || !password) {
       return NextResponse.json(
         { success: false, error: 'Email y contraseña requeridos' },
+        { status: 400 }
+      )
+    }
+
+    // 🛡️ VALIDACIÓN DE FORMATO EMAIL en backend
+    if (!validateEmail(email)) {
+      logger.warn('⚠️ Intento de login con email inválido')
+      return NextResponse.json(
+        { success: false, error: 'Formato de email inválido' },
+        { status: 400 }
+      )
+    }
+
+    // Validar longitud mínima de contraseña
+    if (password.length < 8) {
+      return NextResponse.json(
+        { success: false, error: 'Contraseña debe tener mínimo 8 caracteres' },
         { status: 400 }
       )
     }
