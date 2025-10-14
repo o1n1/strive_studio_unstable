@@ -9,6 +9,7 @@ import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
 import { supabase } from '@/lib/supabase/client'
+import { postJSON } from '@/lib/utils/fetchWithTimeout'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -23,8 +24,6 @@ export default function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    console.log('🔵 [DEBUG] Iniciando handleSubmit')
-    
     const newErrors = {}
 
     if (!formData.email) {
@@ -40,102 +39,62 @@ export default function LoginPage() {
     }
 
     if (Object.keys(newErrors).length > 0) {
-      console.log('❌ [DEBUG] Errores de validación:', newErrors)
       setErrors(newErrors)
       return
     }
 
-    console.log('✅ [DEBUG] Validaciones pasaron, haciendo fetch...')
     setLoading(true)
 
     try {
-      console.log('📡 [DEBUG] Enviando request a /api/login')
-      
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password
-        })
+      // Usar postJSON con timeout de 10 segundos
+      const result = await postJSON('/api/login', {
+        email: formData.email,
+        password: formData.password
       })
 
-      console.log('📊 [DEBUG] Response status:', response.status)
-      
-      const result = await response.json()
-      console.log('📦 [DEBUG] Result completo:', result)
-
       if (result.success) {
-        console.log('✅ [DEBUG] Login exitoso!')
-        console.log('👤 [DEBUG] Usuario:', result.user?.id)
-        console.log('🎭 [DEBUG] Perfil:', result.profile)
-        console.log('🎯 [DEBUG] Rol:', result.profile?.rol)
-        
-        // 🔥 CRÍTICO: Establecer la sesión en el cliente de Supabase
+        // Establecer la sesión en el cliente de Supabase
         if (result.session) {
-          console.log('🔐 [DEBUG] Estableciendo sesión en el cliente...')
-          const { data, error } = await supabase.auth.setSession({
+          await supabase.auth.setSession({
             access_token: result.session.access_token,
             refresh_token: result.session.refresh_token
           })
-          
-          if (error) {
-            console.error('❌ [DEBUG] Error estableciendo sesión:', error)
-            setErrors({ general: 'Error al establecer la sesión' })
-            return
-          }
-          
-          console.log('✅ [DEBUG] Sesión establecida correctamente')
         }
         
         const redirectUrl = getRedirectUrl(result.profile.rol)
-        console.log('🔄 [DEBUG] Redirigiendo a:', redirectUrl)
-        
         router.push(redirectUrl)
-        console.log('✅ [DEBUG] router.push ejecutado')
       } else {
-        console.log('❌ [DEBUG] Login falló:', result.error)
         setErrors({ general: result.error })
       }
     } catch (error) {
-      console.error('💥 [DEBUG] Error en catch:', error)
-      console.error('💥 [DEBUG] Error completo:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      })
-      setErrors({ general: 'Error inesperado. Intenta de nuevo.' })
+      // Mensajes específicos según el tipo de error
+      let errorMessage = 'Error inesperado. Intenta de nuevo.'
+      
+      if (error.isTimeout) {
+        errorMessage = 'La solicitud tardó demasiado. Verifica tu conexión a internet.'
+      } else if (error.isNetworkError) {
+        errorMessage = 'Error de conexión. Verifica tu internet.'
+      }
+      
+      setErrors({ general: errorMessage })
     } finally {
-      console.log('🏁 [DEBUG] Finally ejecutado, setLoading(false)')
       setLoading(false)
     }
   }
 
   const getRedirectUrl = (rol) => {
-    console.log('🎯 [DEBUG] getRedirectUrl llamado con rol:', rol)
-    
-    let url
     switch (rol) {
       case 'admin':
-        url = '/admin/dashboard'
-        break
+        return '/admin/dashboard'
       case 'coach':
-        url = '/coach/clases'
-        break
+        return '/coach/clases'
       case 'cliente':
-        url = '/cliente/reservas'
-        break
+        return '/cliente/reservas'
       case 'staff':
-        url = '/staff/checkin'
-        break
+        return '/staff/checkin'
       default:
-        url = '/cliente/reservas'
+        return '/cliente/reservas'
     }
-    
-    console.log('🎯 [DEBUG] URL calculada:', url)
-    return url
   }
 
   return (
