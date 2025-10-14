@@ -1,24 +1,13 @@
 'use client'
 
-import { ClipboardCheck, LogOut } from 'lucide-react'
-import { useRouter } from 'next/navigation'
-import AuthLayout from '@/components/layouts/AuthLayout'
+import { ClipboardCheck } from 'lucide-react'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
-import Button from '@/components/ui/Button'
 import { useProtectedRoute } from '@/hooks/useProtectedRoute'
-import { logoutUser } from '@/lib/supabase/auth'
 import DashboardSkeleton from '@/components/skeletons/DashboardSkeleton'
 
 export default function StaffCheckinPage() {
-  const router = useRouter()
   const { isAuthorized, loading } = useProtectedRoute('staff')
-
-  const handleLogout = async () => {
-    const result = await logoutUser()
-    if (result.success) {
-      router.push('/')
-    }
-  }
 
   if (loading) {
     return <DashboardSkeleton />
@@ -29,7 +18,7 @@ export default function StaffCheckinPage() {
   }
 
   return (
-    <AuthLayout>
+    <DashboardLayout>
       <Card>
         <div className="text-center space-y-6">
           <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center"
@@ -42,7 +31,7 @@ export default function StaffCheckinPage() {
               Check-in
             </h2>
             <p className="text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-              Gestiona el check-in de clientes y ventas
+              Gestiona el ingreso de clientes
             </p>
           </div>
 
@@ -52,18 +41,11 @@ export default function StaffCheckinPage() {
               border: '1px solid rgba(174, 63, 33, 0.3)' 
             }}>
             <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-              Esta página está en construcción. Aquí podrás hacer check-in de clientes, reservar clases y vender paquetes presencialmente.
+              Esta página está en construcción. Aquí podrás hacer check-in de clientes, ver la lista del día y gestionar reservas.
             </p>
-          </div>
-
-          <div className="pt-4">
-            <Button variant="secondary" onClick={handleLogout}>
-              <LogOut size={18} />
-              Cerrar Sesión
-            </Button>
           </div>
         </div>
       </Card>
-    </AuthLayout>
+    </DashboardLayout>
   )
 }
