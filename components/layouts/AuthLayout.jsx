@@ -6,21 +6,23 @@ export default function AuthLayout({ children }) {
       className="min-h-screen flex items-center justify-center p-4 sm:p-6 md:p-8 relative overflow-hidden"
       style={{ background: 'linear-gradient(135deg, #353535 0%, #1a1a1a 100%)' }}
     >
-      {/* Decoración de fondo */}
+      {/* Decoración de fondo sutil */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div 
-          className="absolute -top-40 -right-40 w-80 h-80 md:w-96 md:h-96 rounded-full opacity-20 animate-pulse"
+          className="absolute top-0 right-0 w-96 h-96 rounded-full opacity-5 animate-pulse"
           style={{ 
             background: 'radial-gradient(circle, #AE3F21 0%, transparent 70%)',
-            animationDuration: '4s'
+            animationDuration: '4s',
+            transform: 'translate(50%, -50%)'
           }} 
         />
         <div 
-          className="absolute -bottom-40 -left-40 w-96 h-96 md:w-[28rem] md:h-[28rem] rounded-full opacity-10 animate-pulse"
+          className="absolute bottom-0 left-0 w-96 h-96 rounded-full opacity-5 animate-pulse"
           style={{ 
             background: 'radial-gradient(circle, #9C7A5E 0%, transparent 70%)',
             animationDuration: '5s',
-            animationDelay: '1s'
+            animationDelay: '1s',
+            transform: 'translate(-50%, 50%)'
           }} 
         />
       </div>
