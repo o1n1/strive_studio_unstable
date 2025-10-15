@@ -439,9 +439,19 @@ function InvitacionCard({ invitacion, onUpdate }) {
   const handleReenviar = async () => {
     setReenviando(true)
     try {
+      // Obtener token de sesión
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError || !session) {
+        throw new Error('No hay sesión activa')
+      }
+
       const response = await fetch('/api/coaches/invite/resend', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
         body: JSON.stringify({ invitationId: invitacion.id })
       })
 
