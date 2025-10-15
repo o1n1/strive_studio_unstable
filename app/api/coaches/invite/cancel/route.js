@@ -3,14 +3,9 @@ import { NextResponse } from 'next/server'
 
 export async function POST(request) {
   try {
-    console.log('🔍 [API] Iniciando POST /api/coaches/invite/cancel')
-    
     // Obtener token del header Authorization
     const authHeader = request.headers.get('authorization')
-    console.log('🔍 [API] Authorization header:', authHeader ? 'Presente' : 'FALTANTE')
-    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.error('❌ [API] Token faltante o formato incorrecto')
       return NextResponse.json(
         { error: 'No autenticado - Token faltante' },
         { status: 401 }
@@ -18,7 +13,6 @@ export async function POST(request) {
     }
 
     const token = authHeader.replace('Bearer ', '')
-    console.log('🔍 [API] Token extraído (primeros 20 chars):', token.substring(0, 20) + '...')
 
     // Crear cliente de Supabase con el token del usuario
     const supabase = createClient(
@@ -33,13 +27,8 @@ export async function POST(request) {
       }
     )
     
-    console.log('🔍 [API] Cliente Supabase creado')
-    
     // Verificar autenticación y rol admin
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
-    console.log('🔍 [API] Usuario:', user ? user.id : 'NULL')
-    console.log('🔍 [API] Auth error:', authError ? authError.message : 'NONE')
     
     if (authError || !user) {
       return NextResponse.json(
@@ -72,26 +61,41 @@ export async function POST(request) {
       )
     }
 
-    console.log('🔍 [API] Cancelando invitación:', invitationId)
+    // Verificar que la invitación existe
+    const { data: invitacion, error: fetchError } = await supabase
+      .from('coach_invitations')
+      .select('id, estado')
+      .eq('id', invitationId)
+      .single()
 
-    // Actualizar estado de invitación a cancelado
+    if (fetchError || !invitacion) {
+      return NextResponse.json(
+        { error: 'Invitación no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    // Solo cancelar si está pendiente
+    if (invitacion.estado !== 'pendiente') {
+      return NextResponse.json(
+        { error: 'Solo se pueden cancelar invitaciones pendientes' },
+        { status: 400 }
+      )
+    }
+
+    // Cancelar invitación
     const { error: updateError } = await supabase
       .from('coach_invitations')
-      .update({ 
-        estado: 'cancelado',
-        updated_at: new Date().toISOString()
-      })
+      .update({ estado: 'cancelado' })
       .eq('id', invitationId)
 
     if (updateError) {
-      console.error('❌ [API] Error al cancelar invitación:', updateError)
+      console.error('Error al cancelar invitación:', updateError)
       return NextResponse.json(
         { error: 'Error al cancelar la invitación' },
         { status: 500 }
       )
     }
-
-    console.log('✅ [API] Invitación cancelada exitosamente')
 
     return NextResponse.json({
       success: true,
@@ -99,7 +103,7 @@ export async function POST(request) {
     })
 
   } catch (error) {
-    console.error('❌ [API] Error en POST /api/coaches/invite/cancel:', error)
+    console.error('Error en POST /api/coaches/invite/cancel:', error)
     return NextResponse.json(
       { error: 'Error interno del servidor' },
       { status: 500 }
