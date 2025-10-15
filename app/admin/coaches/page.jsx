@@ -462,17 +462,21 @@ function InvitacionCard({ invitacion, onUpdate }) {
 
     setCancelando(true)
     try {
-      const { error } = await supabase
-        .from('coach_invitations')
-        .update({ estado: 'cancelado' })
-        .eq('id', invitacion.id)
+      const response = await authenticatedFetch('/api/coaches/invite/cancel', {
+        method: 'POST',
+        body: JSON.stringify({ invitationId: invitacion.id })
+      })
 
-      if (error) throw error
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Error al cancelar')
+      }
       
+      alert('Invitación cancelada exitosamente')
       onUpdate()
     } catch (error) {
       console.error('Error:', error)
-      alert('Error al cancelar la invitación')
+      alert(error.message || 'Error al cancelar la invitación')
     } finally {
       setCancelando(false)
     }
