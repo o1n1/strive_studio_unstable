@@ -4,9 +4,14 @@ import { sendCoachInvitationEmail } from '@/lib/email-templates/coach-invitation
 
 export async function POST(request) {
   try {
+    console.log('🔍 [API] Iniciando POST /api/coaches/invite')
+    
     // Obtener token del header Authorization
     const authHeader = request.headers.get('authorization')
+    console.log('🔍 [API] Authorization header:', authHeader ? 'Presente' : 'FALTANTE')
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error('❌ [API] Token faltante o formato incorrecto')
       return NextResponse.json(
         { error: 'No autenticado - Token faltante' },
         { status: 401 }
@@ -14,6 +19,7 @@ export async function POST(request) {
     }
 
     const token = authHeader.replace('Bearer ', '')
+    console.log('🔍 [API] Token extraído (primeros 20 chars):', token.substring(0, 20) + '...')
 
     // Crear cliente de Supabase con el token del usuario
     const supabase = createClient(
@@ -28,8 +34,13 @@ export async function POST(request) {
       }
     )
     
+    console.log('🔍 [API] Cliente Supabase creado')
+    
     // Verificar autenticación y rol admin
     const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    console.log('🔍 [API] Usuario:', user ? user.id : 'NULL')
+    console.log('🔍 [API] Auth error:', authError ? authError.message : 'NONE')
     
     if (authError || !user) {
       return NextResponse.json(
