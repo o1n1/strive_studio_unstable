@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { X, Mail, Calendar, MessageSquare, Send, Loader2 } from 'lucide-react'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
-import { supabase } from '@/lib/supabase/client'
+import { authenticatedFetch } from '@/lib/auth-helper'
 
 export default function InvitarCoachModal({ onClose, onSuccess }) {
   const [loading, setLoading] = useState(false)
@@ -40,10 +40,18 @@ export default function InvitarCoachModal({ onClose, onSuccess }) {
 
     setLoading(true)
     try {
+      // Obtener token de sesión
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError || !session) {
+        throw new Error('No hay sesión activa. Por favor inicia sesión nuevamente.')
+      }
+
       const response = await fetch('/api/coaches/invite', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify(formData)
       })
