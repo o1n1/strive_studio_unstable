@@ -20,6 +20,7 @@ export default function CoachesPage() {
   const [invitaciones, setInvitaciones] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState('todas')
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     if (isAuthorized) {
@@ -30,6 +31,25 @@ export default function CoachesPage() {
 
   const fetchCoaches = async () => {
     try {
+      console.log('📥 Cargando coaches...')
+      
+      // Verificar sesión primero
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError) {
+        console.error('❌ Error de sesión:', sessionError)
+        setError('Error de autenticación. Por favor recarga la página.')
+        return
+      }
+
+      if (!session) {
+        console.error('❌ No hay sesión activa')
+        setError('Sesión no válida. Por favor inicia sesión nuevamente.')
+        return
+      }
+
+      console.log('✅ Sesión válida, cargando coaches...')
+
       const { data: coachesData, error } = await supabase
         .from('coaches')
         .select(`
@@ -38,9 +58,14 @@ export default function CoachesPage() {
         `)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Error de Supabase:', error)
+        throw error
+      }
 
-      const coachesFormateados = coachesData.map(coach => ({
+      console.log('✅ Coaches cargados:', coachesData?.length || 0)
+
+      const coachesFormateados = (coachesData || []).map(coach => ({
         ...coach,
         email: coach.profiles.email,
         nombre: coach.profiles.nombre,
@@ -50,8 +75,10 @@ export default function CoachesPage() {
       }))
 
       setCoaches(coachesFormateados)
+      setError(null)
     } catch (error) {
-      console.error('Error al cargar coaches:', error)
+      console.error('💥 Error al cargar coaches:', error)
+      setError('Error al cargar coaches. Intenta recargar la página.')
     } finally {
       setLoading(false)
     }
@@ -59,6 +86,16 @@ export default function CoachesPage() {
 
   const fetchInvitaciones = async () => {
     try {
+      console.log('📥 Cargando invitaciones...')
+      
+      // Verificar sesión primero
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError || !session) {
+        console.error('❌ Error de sesión al cargar invitaciones')
+        return
+      }
+
       const { data, error } = await supabase
         .from('coach_invitations')
         .select(`
@@ -67,10 +104,15 @@ export default function CoachesPage() {
         `)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Error al cargar invitaciones:', error)
+        throw error
+      }
+
+      console.log('✅ Invitaciones cargadas:', data?.length || 0)
       setInvitaciones(data || [])
     } catch (error) {
-      console.error('Error al cargar invitaciones:', error)
+      console.error('💥 Error al cargar invitaciones:', error)
     }
   }
 
@@ -109,117 +151,48 @@ export default function CoachesPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 md:space-y-8">
         {/* Header */}
-        <Card>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center"
-                style={{ background: 'rgba(174, 63, 33, 0.2)' }}>
-                <Users size={24} style={{ color: '#AE3F21' }} />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Gestión de Coaches
-                </h2>
-                <p className="text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Administra coaches e invitaciones
-                </p>
-              </div>
-            </div>
-            <Button onClick={() => setShowInvitarModal(true)}>
-              <UserPlus size={18} />
-              Invitar Coach
-            </Button>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              Gestión de Coaches
+            </h1>
+            <p className="text-sm md:text-base opacity-70 mt-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+              Administra coaches, invitaciones y head coaches
+            </p>
           </div>
-        </Card>
+          <Button
+            onClick={() => setShowInvitarModal(true)}
+            className="flex items-center gap-2">
+            <UserPlus size={20} />
+            Invitar Coach
+          </Button>
+        </div>
 
-        {/* Estadísticas */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+        {/* Error Alert */}
+        {error && (
           <Card>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center"
-                style={{ background: 'rgba(174, 63, 33, 0.2)' }}>
-                <Users size={20} style={{ color: '#AE3F21' }} />
+            <div className="flex items-center gap-3 p-4" style={{ background: 'rgba(239, 68, 68, 0.1)' }}>
+              <AlertCircle size={24} style={{ color: '#ef4444' }} />
+              <div className="flex-1">
+                <p className="font-semibold" style={{ color: '#ef4444' }}>Error</p>
+                <p className="text-sm" style={{ color: '#B39A72' }}>{error}</p>
               </div>
-              <div>
-                <p className="text-2xl font-bold" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
-                  {stats.total}
-                </p>
-                <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Total
-                </p>
-              </div>
+              <Button variant="secondary" onClick={fetchCoaches}>
+                Reintentar
+              </Button>
             </div>
           </Card>
+        )}
 
-          <Card>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center"
-                style={{ background: 'rgba(16, 185, 129, 0.2)' }}>
-                <CheckCircle size={20} style={{ color: '#10b981' }} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold" style={{ color: '#10b981', fontFamily: 'Montserrat, sans-serif' }}>
-                  {stats.activos}
-                </p>
-                <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Activos
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <Card>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center"
-                style={{ background: 'rgba(245, 158, 11, 0.2)' }}>
-                <Clock size={20} style={{ color: '#f59e0b' }} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold" style={{ color: '#f59e0b', fontFamily: 'Montserrat, sans-serif' }}>
-                  {stats.pendientes}
-                </p>
-                <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Pendientes
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <Card>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center"
-                style={{ background: 'rgba(107, 114, 128, 0.2)' }}>
-                <XCircle size={20} style={{ color: '#6b7280' }} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold" style={{ color: '#6b7280', fontFamily: 'Montserrat, sans-serif' }}>
-                  {stats.inactivos}
-                </p>
-                <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Inactivos
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <Card>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center"
-                style={{ background: 'rgba(174, 63, 33, 0.2)' }}>
-                <AlertCircle size={20} style={{ color: '#AE3F21' }} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
-                  {stats.headCoaches}
-                </p>
-                <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Head Coaches
-                </p>
-              </div>
-            </div>
-          </Card>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
+          <StatCard label="Total" value={stats.total} />
+          <StatCard label="Activos" value={stats.activos} color="#10b981" />
+          <StatCard label="Pendientes" value={stats.pendientes} color="#f59e0b" />
+          <StatCard label="Inactivos" value={stats.inactivos} color="#6b7280" />
+          <StatCard label="Head Coaches" value={stats.headCoaches} color="#AE3F21" />
         </div>
 
         {/* Tabs y Filtros */}
@@ -237,16 +210,17 @@ export default function CoachesPage() {
                 <button
                   key={tab.id}
                   onClick={() => setTabActivo(tab.id)}
-                  className="px-4 py-2 rounded-xl font-semibold flex items-center gap-2 transition-all"
+                  className="px-4 py-2 rounded-lg font-semibold text-sm transition-all flex items-center gap-2"
                   style={{
-                    background: tabActivo === tab.id ? '#AE3F21' : 'rgba(156, 122, 94, 0.2)',
+                    background: tabActivo === tab.id ? '#AE3F21' : 'rgba(156, 122, 94, 0.1)',
                     color: tabActivo === tab.id ? '#FFFCF3' : '#B39A72',
                     fontFamily: 'Montserrat, sans-serif'
-                  }}
-                >
+                  }}>
                   {tab.label}
-                  <span className="text-xs px-2 py-0.5 rounded-full"
-                    style={{ background: 'rgba(0,0,0,0.2)' }}>
+                  <span className="px-2 py-0.5 rounded-full text-xs"
+                    style={{
+                      background: tabActivo === tab.id ? 'rgba(255, 252, 243, 0.2)' : 'rgba(156, 122, 94, 0.2)'
+                    }}>
                     {tab.count}
                   </span>
                 </button>
@@ -254,16 +228,15 @@ export default function CoachesPage() {
             </div>
 
             {/* Filtros */}
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col md:flex-row gap-3">
               <div className="flex-1 relative">
-                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" 
-                  style={{ color: '#B39A72' }} />
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#B39A72' }} />
                 <input
                   type="text"
                   placeholder="Buscar por nombre o email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 rounded-xl text-sm"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg text-sm"
                   style={{
                     background: 'rgba(156, 122, 94, 0.1)',
                     border: '1px solid rgba(156, 122, 94, 0.2)',
@@ -275,7 +248,7 @@ export default function CoachesPage() {
               <select
                 value={filtroCategoria}
                 onChange={(e) => setFiltroCategoria(e.target.value)}
-                className="px-4 py-2 rounded-xl text-sm"
+                className="px-4 py-2.5 rounded-lg text-sm"
                 style={{
                   background: 'rgba(156, 122, 94, 0.1)',
                   border: '1px solid rgba(156, 122, 94, 0.2)',
@@ -314,7 +287,7 @@ export default function CoachesPage() {
           ))}
         </div>
 
-        {coachesFiltrados.length === 0 && (
+        {coachesFiltrados.length === 0 && !error && (
           <Card>
             <div className="text-center py-12">
               <Users size={48} className="mx-auto mb-4 opacity-30" style={{ color: '#B39A72' }} />
@@ -340,6 +313,21 @@ export default function CoachesPage() {
         />
       )}
     </DashboardLayout>
+  )
+}
+
+function StatCard({ label, value, color = '#B39A72' }) {
+  return (
+    <Card>
+      <div className="text-center">
+        <p className="text-sm opacity-70 mb-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+          {label}
+        </p>
+        <p className="text-2xl md:text-3xl font-bold" style={{ color, fontFamily: 'Montserrat, sans-serif' }}>
+          {value}
+        </p>
+      </div>
+    </Card>
   )
 }
 
@@ -467,10 +455,7 @@ function InvitacionCard({ invitacion, onUpdate }) {
         body: JSON.stringify({ invitationId: invitacion.id })
       })
 
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Error al cancelar')
-      }
+      if (!response.ok) throw new Error('Error al cancelar')
       
       alert('Invitación cancelada exitosamente')
       onUpdate()
@@ -483,56 +468,45 @@ function InvitacionCard({ invitacion, onUpdate }) {
   }
 
   const estadoInfo = getEstadoInfo(invitacion.estado)
-  const Icon = estadoInfo.icon
+  const EstadoIcon = estadoInfo.icon
 
   return (
     <Card>
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3 flex-1">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center"
-            style={{ background: estadoInfo.bg }}>
-            <Icon size={20} style={{ color: estadoInfo.color }} />
-          </div>
-          <div className="flex-1">
-            <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              {invitacion.email}
-            </p>
-            <div className="flex flex-wrap gap-2 mt-1 text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-              <span>📂 {invitacion.categoria}</span>
-              <span>• {estadoInfo.texto}</span>
-              {invitacion.invitado_por && (
-                <span>• Por: {invitacion.invitado_por.nombre}</span>
-              )}
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <div className="flex items-center gap-3 mb-2">
+            <EstadoIcon size={20} style={{ color: estadoInfo.color }} />
+            <div>
+              <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                {invitacion.email}
+              </p>
+              <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                {invitacion.categoria} • {estadoInfo.texto}
+              </p>
             </div>
           </div>
+          {invitacion.invitado_por && (
+            <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+              Invitado por: {invitacion.invitado_por.nombre} {invitacion.invitado_por.apellidos}
+            </p>
+          )}
         </div>
-        
         {invitacion.estado === 'pendiente' && (
           <div className="flex gap-2">
-            <button
+            <Button
+              variant="secondary"
               onClick={handleReenviar}
               disabled={reenviando}
-              className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
-              style={{
-                background: 'rgba(174, 63, 33, 0.2)',
-                color: '#AE3F21',
-                fontFamily: 'Montserrat, sans-serif'
-              }}
-            >
+              className="text-sm">
               {reenviando ? 'Enviando...' : 'Reenviar'}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="secondary"
               onClick={handleCancelar}
               disabled={cancelando}
-              className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
-              style={{
-                background: 'rgba(239, 68, 68, 0.2)',
-                color: '#ef4444',
-                fontFamily: 'Montserrat, sans-serif'
-              }}
-            >
+              className="text-sm">
               {cancelando ? 'Cancelando...' : 'Cancelar'}
-            </button>
+            </Button>
           </div>
         )}
       </div>
