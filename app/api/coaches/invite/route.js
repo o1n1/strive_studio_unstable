@@ -1,11 +1,32 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { sendCoachInvitationEmail } from '@/lib/email-templates/coach-invitation'
 
 export async function POST(request) {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
+    // Obtener token del header Authorization
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'No autenticado - Token faltante' },
+        { status: 401 }
+      )
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+
+    // Crear cliente de Supabase con el token del usuario
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      }
+    )
     
     // Verificar autenticación y rol admin
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -156,7 +177,29 @@ export async function POST(request) {
 // API para reenviar invitación
 export async function PUT(request) {
   try {
-    const supabase = createRouteHandlerClient({ cookies })
+    // Obtener token del header Authorization
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'No autenticado - Token faltante' },
+        { status: 401 }
+      )
+    }
+
+    const token = authHeader.replace('Bearer ', '')
+
+    // Crear cliente de Supabase con el token del usuario
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      }
+    )
     
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     
