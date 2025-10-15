@@ -1,6 +1,6 @@
 'use client'
 
-import { Shield, Building2, Bike, Users, Calendar, Package, Settings } from 'lucide-react'
+import { Shield, Building2, Bike, Users, Calendar, Package, Settings, UserCog } from 'lucide-react'
 import Link from 'next/link'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
@@ -24,6 +24,13 @@ export default function AdminDashboardPage() {
       descripcion: 'Gestiona bicis y disponibilidad',
       icono: Building2,
       href: '/admin/layout-estudio',
+      disponible: true
+    },
+    {
+      titulo: 'Gestión de Coaches',
+      descripcion: 'Administra coaches e invitaciones',
+      icono: UserCog,
+      href: '/admin/coaches',
       disponible: true
     },
     {
