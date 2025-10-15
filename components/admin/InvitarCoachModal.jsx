@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { X, Mail, Calendar, MessageSquare, Send, Loader2 } from 'lucide-react'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
+import { supabase } from '@/lib/supabase/client'
 
 export default function InvitarCoachModal({ onClose, onSuccess }) {
   const [loading, setLoading] = useState(false)
