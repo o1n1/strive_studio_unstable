@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { X, Mail, Calendar, MessageSquare, Send, Loader2 } from 'lucide-react'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
-import { authenticatedFetch } from '@/lib/auth-helper'
+import { supabase } from '@/lib/supabase/client'
 
 export default function InvitarCoachModal({ onClose, onSuccess }) {
   const [loading, setLoading] = useState(false)
@@ -115,14 +115,15 @@ export default function InvitarCoachModal({ onClose, onSuccess }) {
                   className="w-full px-4 py-3 rounded-xl text-sm"
                   style={{
                     background: 'rgba(156, 122, 94, 0.1)',
-                    border: errors.email ? '2px solid #ef4444' : '1px solid rgba(156, 122, 94, 0.2)',
+                    border: errors.email ? '1px solid #ef4444' : '1px solid rgba(156, 122, 94, 0.2)',
                     color: '#FFFCF3',
                     fontFamily: 'Montserrat, sans-serif'
                   }}
                   disabled={loading}
+                  required
                 />
                 {errors.email && (
-                  <p className="text-xs mt-1" style={{ color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
+                  <p className="text-xs mt-1" style={{ color: '#ef4444' }}>
                     {errors.email}
                   </p>
                 )}
@@ -132,37 +133,25 @@ export default function InvitarCoachModal({ onClose, onSuccess }) {
               <div>
                 <label className="flex items-center gap-2 text-sm font-semibold mb-2"
                   style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  📂 Categoría *
+                  <Calendar size={16} style={{ color: '#AE3F21' }} />
+                  Categoría *
                 </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { value: 'cycling', label: '🚴 Cycling', emoji: '🚴' },
-                    { value: 'funcional', label: '💪 Funcional', emoji: '💪' },
-                    { value: 'ambos', label: '🔥 Ambos', emoji: '🔥' }
-                  ].map(cat => (
-                    <button
-                      key={cat.value}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, categoria: cat.value })}
-                      className="px-4 py-3 rounded-xl text-sm font-semibold transition-all"
-                      style={{
-                        background: formData.categoria === cat.value ? '#AE3F21' : 'rgba(156, 122, 94, 0.2)',
-                        color: formData.categoria === cat.value ? '#FFFCF3' : '#B39A72',
-                        fontFamily: 'Montserrat, sans-serif',
-                        border: formData.categoria === cat.value ? 'none' : '1px solid rgba(156, 122, 94, 0.2)'
-                      }}
-                      disabled={loading}
-                    >
-                      <div className="text-2xl mb-1">{cat.emoji}</div>
-                      {cat.value}
-                    </button>
-                  ))}
-                </div>
-                {errors.categoria && (
-                  <p className="text-xs mt-1" style={{ color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
-                    {errors.categoria}
-                  </p>
-                )}
+                <select
+                  value={formData.categoria}
+                  onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl text-sm"
+                  style={{
+                    background: 'rgba(156, 122, 94, 0.1)',
+                    border: '1px solid rgba(156, 122, 94, 0.2)',
+                    color: '#FFFCF3',
+                    fontFamily: 'Montserrat, sans-serif'
+                  }}
+                  disabled={loading}
+                  required>
+                  <option value="cycling">🚴 Cycling</option>
+                  <option value="funcional">💪 Funcional</option>
+                  <option value="ambos">🔥 Ambos</option>
+                </select>
               </div>
 
               {/* Expiración */}
@@ -170,7 +159,7 @@ export default function InvitarCoachModal({ onClose, onSuccess }) {
                 <label className="flex items-center gap-2 text-sm font-semibold mb-2"
                   style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
                   <Calendar size={16} style={{ color: '#AE3F21' }} />
-                  Expiración del Link
+                  Link Válido Por
                 </label>
                 <select
                   value={formData.expiracion}
@@ -182,8 +171,7 @@ export default function InvitarCoachModal({ onClose, onSuccess }) {
                     color: '#FFFCF3',
                     fontFamily: 'Montserrat, sans-serif'
                   }}
-                  disabled={loading}
-                >
+                  disabled={loading}>
                   <option value="7">7 días</option>
                   <option value="15">15 días</option>
                   <option value="30">30 días</option>
