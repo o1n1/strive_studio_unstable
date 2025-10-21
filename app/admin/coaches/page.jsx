@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import InviteCoachModal from '@/components/admin/InviteCoachModal'
+import InvitarCoachModal from '@/components/admin/InvitarCoachModal'
 
 export default function CoachesPage() {
   const router = useRouter()
