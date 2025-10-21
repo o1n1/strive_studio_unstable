@@ -358,7 +358,7 @@ export default function CoachesPage() {
 
       {/* Modal de invitación */}
       {showInviteModal && (
-        <InviteCoachModal
+        <InvitarCoachModal
           onClose={() => setShowInviteModal(false)}
           onSuccess={() => {
             setShowInviteModal(false)
