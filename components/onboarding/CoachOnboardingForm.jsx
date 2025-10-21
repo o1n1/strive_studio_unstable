@@ -4,6 +4,9 @@ import { useState } from 'react'
 import StepIndicator from './StepIndicator'
 import Step1CrearCuenta from './steps/Step1CrearCuenta'
 import Step2InfoPersonal from './steps/Step2InfoPersonal'
+import Step3InfoProfesional from './steps/Step3InfoProfesional'
+import Step4Certificaciones from './steps/Step4Certificaciones'
+import Step5RedesSociales from './steps/Step5RedesSociales'
 
 const TOTAL_STEPS = 9
 
