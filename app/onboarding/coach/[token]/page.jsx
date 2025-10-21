@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase/client'
 import { Loader2, AlertCircle, CheckCircle } from 'lucide-react'
 
 export default function CoachOnboardingPage() {
@@ -20,45 +19,26 @@ export default function CoachOnboardingPage() {
     try {
       console.log('🔍 Verificando token:', params.token)
 
-      const { data, error } = await supabase
-        .from('coach_invitations')
-        .select('*')
-        .eq('token', params.token)
-        .single()
+      // Llamar a API que usa Service Role Key
+      const response = await fetch('/api/coaches/verify-invitation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ token: params.token })
+      })
 
-      if (error) {
-        console.error('❌ Error al verificar token:', error)
-        setError('Token inválido o expirado')
+      const data = await response.json()
+
+      if (!response.ok) {
+        console.error('❌ Error al verificar:', data.error)
+        setError(data.error || 'Token inválido o expirado')
         setLoading(false)
         return
       }
 
-      console.log('✅ Invitación encontrada:', data)
-
-      // Verificar estado
-      if (data.estado !== 'pendiente') {
-        setError(`Esta invitación ya fue ${data.estado}`)
-        setLoading(false)
-        return
-      }
-
-      // Verificar expiración
-      const ahora = new Date()
-      const expiracion = new Date(data.expira_en)
-      
-      if (expiracion < ahora) {
-        // Marcar como expirada
-        await supabase
-          .from('coach_invitations')
-          .update({ estado: 'expirado' })
-          .eq('id', data.id)
-
-        setError('Esta invitación ha expirado')
-        setLoading(false)
-        return
-      }
-
-      setInvitacion(data)
+      console.log('✅ Invitación válida:', data.invitacion)
+      setInvitacion(data.invitacion)
       setLoading(false)
 
     } catch (error) {
