@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import CoachOnboardingForm from '@/components/onboarding/CoachOnboardingForm'
 
-export default function RegistroPage() {
+function RegistroContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
@@ -89,5 +89,23 @@ export default function RegistroPage() {
       style={{ background: 'linear-gradient(135deg, #353535 0%, #1a1a1a 100%)' }}>
       <CoachOnboardingForm invitacion={invitacion} token={token} />
     </div>
+  )
+}
+
+export default function RegistroPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center"
+        style={{ background: 'linear-gradient(135deg, #353535 0%, #1a1a1a 100%)' }}>
+        <div className="text-center">
+          <Loader2 size={48} className="animate-spin mx-auto mb-4" style={{ color: '#AE3F21' }} />
+          <p style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+            Cargando...
+          </p>
+        </div>
+      </div>
+    }>
+      <RegistroContent />
+    </Suspense>
   )
 }
