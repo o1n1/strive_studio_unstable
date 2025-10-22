@@ -176,7 +176,7 @@ export default function Step6Documentos({ data, updateData, nextStep, prevStep }
             Documentos obligatorios
           </p>
           <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-            INE (ambos lados) y comprobante de domicilio son obligatorios. Los demás documentos son opcionales pero recomendados.
+            INE (ambos lados) y comprobante de domicilio son obligatorios para completar tu registro.
           </p>
         </div>
       </div>
@@ -193,19 +193,6 @@ export default function Step6Documentos({ data, updateData, nextStep, prevStep }
         {renderFileUpload('ine_frente', 'INE o Identificación Oficial (Frente)', true, ineFrenteRef, 'Sube una foto clara del frente de tu INE')}
         {renderFileUpload('ine_reverso', 'INE o Identificación Oficial (Reverso)', true, ineReversoRef, 'Sube una foto clara del reverso de tu INE')}
         {renderFileUpload('comprobante_domicilio', 'Comprobante de Domicilio', true, comprobanteDomicilioRef, 'No mayor a 3 meses (luz, agua, teléfono, estado de cuenta)')}
-      </div>
-
-      {/* Documentos Opcionales */}
-      <div className="p-6 rounded-xl space-y-6" style={{ background: 'rgba(156, 122, 94, 0.05)', border: '1px solid rgba(156, 122, 94, 0.2)' }}>
-        <div className="flex items-center gap-2 mb-4">
-          <FileText size={24} style={{ color: '#B39A72' }} />
-          <h3 className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-            Documentos Opcionales
-          </h3>
-        </div>
-
-        {renderFileUpload('titulo_cedula', 'Título o Cédula Profesional', false, tituloCedulaRef, 'Si cuentas con título profesional relacionado')}
-        {renderFileUpload('antecedentes_penales', 'Carta de Antecedentes No Penales', false, antecedentesPenalesRef, 'Recomendado pero no obligatorio')}
       </div>
 
       {/* Progress */}
@@ -231,16 +218,6 @@ export default function Step6Documentos({ data, updateData, nextStep, prevStep }
             {data.comprobante_domicilio && (
               <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
                 ✓ Comprobante de domicilio subido
-              </p>
-            )}
-            {data.titulo_cedula && (
-              <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                ✓ Título/Cédula subido (opcional)
-              </p>
-            )}
-            {data.antecedentes_penales && (
-              <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                ✓ Antecedentes no penales subidos (opcional)
               </p>
             )}
           </div>
