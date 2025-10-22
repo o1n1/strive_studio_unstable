@@ -49,12 +49,11 @@ export default function AdminCoachesPage() {
         .from('coaches_complete')
         .select('*')
         .order('coach_created_at', { ascending: false })
-      
-      if (error) throw error
-      
-      setCoaches(data || [])
 
-      console.log('✅ Coaches cargados:', coachesTransformados.length)
+      if (error) throw error
+
+      console.log('✅ Coaches cargados:', (data || []).length)
+      setCoaches(data || [])
       setLoading(false)
     } catch (error) {
       console.error('Error cargando coaches:', error)
@@ -153,7 +152,6 @@ export default function AdminCoachesPage() {
     }
   }
 
-  // Stats
   const stats = {
     total: coaches.length,
     activos: coaches.filter(c => c.estado === 'activo').length,
@@ -162,7 +160,6 @@ export default function AdminCoachesPage() {
     invitacionesPendientes: invitaciones.filter(i => i.estado === 'pendiente').length
   }
 
-  // Filtrar coaches
   const coachesFiltrados = coaches.filter(coach => {
     if (tabActivo === 'activos' && coach.estado !== 'activo') return false
     if (tabActivo === 'pendientes' && coach.estado !== 'pendiente') return false
@@ -191,18 +188,13 @@ export default function AdminCoachesPage() {
     return (
       <DashboardLayout>
         <Card>
-          <div className="text-center space-y-4">
-            <XCircle size={48} style={{ color: '#ef4444' }} className="mx-auto" />
-            <h2 className="text-xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              Error al cargar coaches
-            </h2>
-            <p style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-              {error}
-            </p>
+          <div className="text-center py-12">
+            <p className="text-red-500 mb-4">Error al cargar coaches</p>
+            <p className="text-sm text-gray-400 mb-4">{error}</p>
             <button
               onClick={loadData}
-              className="px-4 py-2 rounded-lg font-semibold"
-              style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              className="px-6 py-2 rounded-lg"
+              style={{ background: '#AE3F21', color: '#FFFCF3' }}>
               Reintentar
             </button>
           </div>
@@ -217,20 +209,19 @@ export default function AdminCoachesPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+            <h1 className="text-3xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
               Gestión de Coaches
             </h1>
             <p className="text-sm opacity-70 mt-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
               Administra coaches, invitaciones y aprobaciones
             </p>
           </div>
-          
           <button
             onClick={() => setShowInviteModal(true)}
-            className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+            className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-90 flex items-center gap-2"
             style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-            <Plus size={18} />
-            Invitar Nuevo Coach
+            <Plus size={20} />
+            Invitar Coach
           </button>
         </div>
 
@@ -238,21 +229,21 @@ export default function AdminCoachesPage() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card>
             <div className="text-center">
-              <p className="text-3xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              <p className="text-3xl font-bold mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
                 {stats.total}
               </p>
-              <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                Total
+              <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Total Coaches
               </p>
             </div>
           </Card>
           
           <Card>
             <div className="text-center">
-              <p className="text-3xl font-bold" style={{ color: '#10b981', fontFamily: 'Montserrat, sans-serif' }}>
+              <p className="text-3xl font-bold mb-1" style={{ color: '#10b981', fontFamily: 'Montserrat, sans-serif' }}>
                 {stats.activos}
               </p>
-              <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+              <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
                 Activos
               </p>
             </div>
@@ -260,10 +251,10 @@ export default function AdminCoachesPage() {
 
           <Card>
             <div className="text-center">
-              <p className="text-3xl font-bold" style={{ color: '#fbbf24', fontFamily: 'Montserrat, sans-serif' }}>
+              <p className="text-3xl font-bold mb-1" style={{ color: '#fbbf24', fontFamily: 'Montserrat, sans-serif' }}>
                 {stats.pendientes}
               </p>
-              <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+              <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
                 Pendientes
               </p>
             </div>
@@ -271,10 +262,10 @@ export default function AdminCoachesPage() {
 
           <Card>
             <div className="text-center">
-              <p className="text-3xl font-bold" style={{ color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
+              <p className="text-3xl font-bold mb-1" style={{ color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
                 {stats.inactivos}
               </p>
-              <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+              <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
                 Inactivos
               </p>
             </div>
@@ -282,56 +273,57 @@ export default function AdminCoachesPage() {
 
           <Card>
             <div className="text-center">
-              <p className="text-3xl font-bold" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
+              <p className="text-3xl font-bold mb-1" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
                 {stats.invitacionesPendientes}
               </p>
-              <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+              <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
                 Invitaciones
               </p>
             </div>
           </Card>
         </div>
 
-        {/* Tabs y Búsqueda */}
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex gap-2 overflow-x-auto">
-            {[
-              { id: 'todos', label: 'Todos', count: stats.total },
-              { id: 'activos', label: 'Activos', count: stats.activos },
-              { id: 'pendientes', label: 'Pendientes', count: stats.pendientes },
-              { id: 'inactivos', label: 'Inactivos', count: stats.inactivos }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setTabActivo(tab.id)}
-                className="px-4 py-2 rounded-lg font-semibold whitespace-nowrap transition-all"
+        {/* Filtros */}
+        <Card>
+          <div className="flex flex-col md:flex-row gap-4">
+            {/* Search */}
+            <div className="flex-1 relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search size={20} style={{ color: '#B39A72' }} />
+              </div>
+              <input
+                type="text"
+                placeholder="Buscar por nombre o email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 rounded-xl"
                 style={{
-                  background: tabActivo === tab.id ? '#AE3F21' : 'rgba(156, 122, 94, 0.2)',
-                  color: tabActivo === tab.id ? '#FFFCF3' : '#B39A72',
+                  background: 'rgba(42, 42, 42, 0.8)',
+                  border: '1px solid rgba(156, 122, 94, 0.3)',
+                  color: '#FFFCF3',
                   fontFamily: 'Montserrat, sans-serif'
-                }}>
-                {tab.label} ({tab.count})
-              </button>
-            ))}
-          </div>
+                }}
+              />
+            </div>
 
-          <div className="relative flex-1">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#B39A72' }} />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por nombre o email..."
-              className="w-full pl-10 pr-4 py-2 rounded-lg text-sm"
-              style={{
-                background: 'rgba(42, 42, 42, 0.8)',
-                border: '1px solid rgba(156, 122, 94, 0.3)',
-                color: '#FFFCF3',
-                fontFamily: 'Montserrat, sans-serif'
-              }}
-            />
+            {/* Tabs */}
+            <div className="flex gap-2">
+              {['todos', 'activos', 'pendientes', 'inactivos'].map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setTabActivo(tab)}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all"
+                  style={{
+                    background: tabActivo === tab ? '#AE3F21' : 'rgba(156, 122, 94, 0.2)',
+                    color: tabActivo === tab ? '#FFFCF3' : '#B39A72',
+                    fontFamily: 'Montserrat, sans-serif'
+                  }}>
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        </Card>
 
         {/* Lista de Coaches */}
         <div className="space-y-4">
@@ -422,19 +414,10 @@ export default function AdminCoachesPage() {
                       <button
                         onClick={() => handleEliminarCoach(coach.id)}
                         disabled={deleting === coach.id}
-                        className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2 ml-auto"
+                        className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2 ml-auto disabled:opacity-50"
                         style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
-                        {deleting === coach.id ? (
-                          <>
-                            <Loader2 size={16} className="animate-spin" />
-                            Eliminando...
-                          </>
-                        ) : (
-                          <>
-                            <Trash2 size={16} />
-                            Eliminar
-                          </>
-                        )}
+                        {deleting === coach.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        Eliminar
                       </button>
                     </div>
                   </div>
@@ -443,58 +426,15 @@ export default function AdminCoachesPage() {
             ))
           )}
         </div>
-
-        {/* Invitaciones Pendientes */}
-        {invitaciones.filter(i => i.estado === 'pendiente').length > 0 && (
-          <div className="space-y-4">
-            <h3 className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              Invitaciones Pendientes ({invitaciones.filter(i => i.estado === 'pendiente').length})
-            </h3>
-            
-            <div className="space-y-3">
-              {invitaciones
-                .filter(i => i.estado === 'pendiente')
-                .map(inv => (
-                  <Card key={inv.id}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                          {inv.email}
-                        </p>
-                        <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                          {inv.categoria} • Expira: {new Date(inv.expira_en).toLocaleDateString('es-MX')}
-                        </p>
-                      </div>
-                      
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleReenviarInvitacion(inv.id)}
-                          className="px-3 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-80"
-                          style={{ background: 'rgba(156, 122, 94, 0.3)', color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                          <Send size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleCancelarInvitacion(inv.id)}
-                          className="px-3 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-80"
-                          style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
-                          <Ban size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Modal de Invitación */}
+      {/* Modal Invitar */}
       {showInviteModal && (
         <InvitarCoachModal
           onClose={() => setShowInviteModal(false)}
           onSuccess={() => {
             setShowInviteModal(false)
-            loadData()
+            fetchInvitaciones()
           }}
         />
       )}
