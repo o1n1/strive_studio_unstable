@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Mail, Calendar, X, Send, Loader2, RefreshCw, Ban, UserCog, Filter } from 'lucide-react'
+import { Plus, Mail, Calendar, X, Send, Loader2, RefreshCw, Ban, UserCog, Filter, Trash2, Eye, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
 import Button from '@/components/ui/Button'
@@ -19,8 +19,9 @@ export default function CoachesPage() {
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState('todas')
-  const [tabActivo, setTabActivo] = useState('todos')
+  const [tabActivo, setTabActivo] = useState('pendientes') // Cambiado a pendientes por default
   const [error, setError] = useState(null)
+  const [deleting, setDeleting] = useState(null)
 
   // Form data para modal
   const [formData, setFormData] = useState({
@@ -73,165 +74,186 @@ export default function CoachesPage() {
         avatar_url: coach.profile?.avatar_url || null
       }))
 
-      setCoaches(coachesTransformados)
       console.log('✅ Coaches cargados:', coachesTransformados.length)
+      setCoaches(coachesTransformados)
+      setLoading(false)
     } catch (error) {
-      console.error('Error al cargar coaches:', error)
-      setError('Error al cargar coaches')
-    } finally {
+      console.error('Error cargando coaches:', error)
+      setError(error.message)
       setLoading(false)
     }
   }
 
   const fetchInvitaciones = async () => {
     try {
-      console.log('📥 Cargando invitaciones...')
-      
       const { data, error } = await supabase
         .from('coach_invitations')
-        .select(`
-          *,
-          invitador:profiles!coach_invitations_invitado_por_fkey(nombre, apellidos)
-        `)
+        .select('*')
         .order('created_at', { ascending: false })
 
       if (error) throw error
-
       setInvitaciones(data || [])
-      console.log('✅ Invitaciones cargadas:', data?.length || 0)
     } catch (error) {
-      console.error('Error al cargar invitaciones:', error)
+      console.error('Error cargando invitaciones:', error)
     }
   }
 
-  const handleInviteSubmit = async (e) => {
+  // Función para eliminar coach COMPLETAMENTE (para pruebas)
+  const handleEliminarCoach = async (coachId) => {
+    if (!confirm('⚠️ ESTA ACCIÓN ES IRREVERSIBLE\n\n¿Estás seguro de eliminar COMPLETAMENTE este coach?\n\nSe eliminarán:\n- Datos del coach\n- Perfil\n- Usuario de autenticación\n- Documentos\n- Certificaciones\n- Contratos')) {
+      return
+    }
+
+    setDeleting(coachId)
+
+    try {
+      // Llamar al endpoint que eliminará todo
+      const response = await fetch('/api/coaches/delete', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({ coachId })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al eliminar coach')
+      }
+
+      alert('✅ Coach eliminado completamente')
+      await loadData()
+    } catch (error) {
+      console.error('Error eliminando coach:', error)
+      alert('❌ Error: ' + error.message)
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  // Stats
+  const stats = {
+    total: coaches.length,
+    activos: coaches.filter(c => c.estado === 'activo').length,
+    pendientes: coaches.filter(c => c.estado === 'pendiente').length,
+    inactivos: coaches.filter(c => c.estado === 'inactivo').length,
+    invitacionesPendientes: invitaciones.filter(i => i.estado === 'pendiente').length
+  }
+
+  // Filtrar coaches
+  const coachesFiltrados = coaches.filter(coach => {
+    // Filtro de tab
+    if (tabActivo === 'activos' && coach.estado !== 'activo') return false
+    if (tabActivo === 'pendientes' && coach.estado !== 'pendiente') return false
+    if (tabActivo === 'inactivos' && coach.estado !== 'inactivo') return false
+
+    // Filtro de búsqueda
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase()
+      const matchNombre = coach.nombre?.toLowerCase().includes(search)
+      const matchApellidos = coach.apellidos?.toLowerCase().includes(search)
+      const matchEmail = coach.email?.toLowerCase().includes(search)
+      if (!matchNombre && !matchApellidos && !matchEmail) return false
+    }
+
+    return true
+  })
+
+  // Handlers del modal de invitación (mantener los existentes)
+  const handleSendInvite = async (e) => {
     e.preventDefault()
     
-    // Validar
-    const errors = {}
-    if (!formData.email) errors.email = 'Email requerido'
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errors.email = 'Email inválido'
-    if (!formData.categoria) errors.categoria = 'Categoría requerida'
+    const newErrors = {}
+    if (!formData.email) newErrors.email = 'Email requerido'
+    if (!formData.categoria) newErrors.categoria = 'Categoría requerida'
     
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors)
+    if (Object.keys(newErrors).length > 0) {
+      setFormErrors(newErrors)
       return
     }
 
     setSendingInvite(true)
+    setFormErrors({})
+
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session) {
-        alert('No hay sesión activa')
-        return
-      }
 
       const response = await fetch('/api/coaches/invite', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${session?.access_token}`
         },
         body: JSON.stringify(formData)
       })
 
-      const data = await response.json()
+      const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Error al enviar invitación')
+        throw new Error(result.error || 'Error al enviar invitación')
       }
 
       alert('✅ Invitación enviada exitosamente')
       setShowInviteModal(false)
       setFormData({ email: '', categoria: 'cycling', expiracion: '7', mensaje: '' })
-      setFormErrors({})
-      fetchInvitaciones()
+      await fetchInvitaciones()
     } catch (error) {
       console.error('Error:', error)
-      alert(error.message || 'Error al enviar la invitación')
+      setFormErrors({ submit: error.message })
     } finally {
       setSendingInvite(false)
     }
   }
 
   const handleReenviarInvitacion = async (invitacionId) => {
-    if (!confirm('¿Reenviar esta invitación?')) return
-
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      
-      const response = await fetch('/api/coaches/invite/resend', {
-        method: 'POST',
+
+      const response = await fetch('/api/coaches/invite', {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${session?.access_token}`
         },
         body: JSON.stringify({ invitationId: invitacionId })
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Error al reenviar')
-      }
-
-      alert('✅ Invitación reenviada exitosamente')
+      if (!response.ok) throw new Error('Error al reenviar')
+      
+      alert('✅ Invitación reenviada')
+      await fetchInvitaciones()
     } catch (error) {
       console.error('Error:', error)
-      alert(error.message)
+      alert('Error al reenviar invitación')
     }
   }
 
   const handleCancelarInvitacion = async (invitacionId) => {
-    if (!confirm('¿Cancelar esta invitación? Esta acción no se puede deshacer.')) return
+    if (!confirm('¿Cancelar esta invitación?')) return
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      
+
       const response = await fetch('/api/coaches/invite/cancel', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${session?.access_token}`
         },
         body: JSON.stringify({ invitationId: invitacionId })
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Error al cancelar')
-      }
-
+      if (!response.ok) throw new Error('Error al cancelar')
+      
       alert('✅ Invitación cancelada')
-      fetchInvitaciones()
+      await fetchInvitaciones()
     } catch (error) {
       console.error('Error:', error)
-      alert(error.message)
+      alert('Error al cancelar invitación')
     }
   }
-
-  const stats = {
-    total: coaches.length,
-    activos: coaches.filter(c => c.estado === 'activo').length,
-    pendientes: coaches.filter(c => c.estado === 'pendiente').length + invitaciones.filter(i => i.estado === 'pendiente').length,
-    inactivos: coaches.filter(c => c.estado === 'inactivo').length,
-    headCoaches: coaches.filter(c => c.es_head_coach).length
-  }
-
-  const coachesFiltrados = coaches.filter(coach => {
-    const matchSearch = `${coach.nombre} ${coach.apellidos} ${coach.email}`.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchCategoria = filtroCategoria === 'todas' || coach.categoria_head === filtroCategoria
-    const matchTab = 
-      tabActivo === 'todos' ||
-      (tabActivo === 'activos' && coach.estado === 'activo') ||
-      (tabActivo === 'pendientes' && coach.estado === 'pendiente') ||
-      (tabActivo === 'inactivos' && coach.estado === 'inactivo') ||
-      (tabActivo === 'head' && coach.es_head_coach)
-    
-    return matchSearch && matchCategoria && matchTab
-  })
 
   if (authLoading || loading) {
     return <DashboardSkeleton />
@@ -254,10 +276,16 @@ export default function CoachesPage() {
               Administra coaches e invitaciones
             </p>
           </div>
-          <Button onClick={() => setShowInviteModal(true)}>
-            <Plus size={20} />
-            Invitar Coach
-          </Button>
+          <div className="flex gap-3">
+            <Button onClick={loadData} variant="secondary">
+              <RefreshCw size={20} />
+              Actualizar
+            </Button>
+            <Button onClick={() => setShowInviteModal(true)}>
+              <Plus size={20} />
+              Invitar Coach
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -283,13 +311,19 @@ export default function CoachesPage() {
             </div>
           </Card>
           <Card>
-            <div className="text-center">
+            <div className="text-center relative">
               <p className="text-2xl font-bold" style={{ color: '#f59e0b', fontFamily: 'Montserrat, sans-serif' }}>
                 {stats.pendientes}
               </p>
               <p className="text-xs opacity-70 mt-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
                 Pendientes
               </p>
+              {stats.pendientes > 0 && (
+                <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center animate-pulse"
+                  style={{ background: '#f59e0b' }}>
+                  <span className="text-xs font-bold" style={{ color: '#1a1a1a' }}>!</span>
+                </div>
+              )}
             </div>
           </Card>
           <Card>
@@ -304,11 +338,11 @@ export default function CoachesPage() {
           </Card>
           <Card>
             <div className="text-center">
-              <p className="text-2xl font-bold" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
-                {stats.headCoaches}
+              <p className="text-2xl font-bold" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                {stats.invitacionesPendientes}
               </p>
               <p className="text-xs opacity-70 mt-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                Head Coaches
+                Invitaciones
               </p>
             </div>
           </Card>
@@ -316,130 +350,155 @@ export default function CoachesPage() {
 
         {/* Tabs */}
         <div className="flex gap-2 overflow-x-auto pb-2">
-          {['todos', 'activos', 'pendientes', 'inactivos', 'head'].map((tab) => (
+          {['todos', 'pendientes', 'activos', 'inactivos'].map(tab => (
             <button
               key={tab}
               onClick={() => setTabActivo(tab)}
-              className="px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all capitalize"
+              className="px-4 py-2 rounded-xl font-semibold whitespace-nowrap transition-all relative"
               style={{
                 background: tabActivo === tab ? '#AE3F21' : 'rgba(156, 122, 94, 0.2)',
                 color: tabActivo === tab ? '#FFFCF3' : '#B39A72',
                 fontFamily: 'Montserrat, sans-serif'
-              }}
-            >
-              {tab === 'head' ? 'Head Coaches' : tab}
+              }}>
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'pendientes' && stats.pendientes > 0 && (
+                <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-bold"
+                  style={{ background: '#f59e0b', color: '#1a1a1a' }}>
+                  {stats.pendientes}
+                </span>
+              )}
             </button>
           ))}
         </div>
 
-        {/* Filtros */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1">
-            <input
-              type="text"
-              placeholder="Buscar por nombre o email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl text-sm"
-              style={{
-                background: 'rgba(156, 122, 94, 0.1)',
-                border: '1px solid rgba(156, 122, 94, 0.2)',
-                color: '#FFFCF3',
-                fontFamily: 'Montserrat, sans-serif'
-              }}
-            />
-          </div>
-          <select
-            value={filtroCategoria}
-            onChange={(e) => setFiltroCategoria(e.target.value)}
-            className="px-4 py-3 rounded-xl text-sm"
+        {/* Búsqueda */}
+        <div className="flex-1">
+          <input
+            type="text"
+            placeholder="Buscar por nombre o email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl text-sm"
             style={{
               background: 'rgba(156, 122, 94, 0.1)',
               border: '1px solid rgba(156, 122, 94, 0.2)',
               color: '#FFFCF3',
               fontFamily: 'Montserrat, sans-serif'
             }}
-          >
-            <option value="todas">Todas las categorías</option>
-            <option value="cycling">Cycling</option>
-            <option value="funcional">Funcional</option>
-          </select>
+          />
         </div>
 
-        {/* Coaches Grid */}
-        {coachesFiltrados.length === 0 && coaches.length === 0 ? (
+        {/* Lista de Coaches */}
+        {coachesFiltrados.length === 0 ? (
           <Card>
             <div className="text-center py-12">
               <UserCog size={48} style={{ color: '#9C7A5E', margin: '0 auto 16px' }} />
               <p className="text-lg font-semibold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                No hay coaches registrados
-              </p>
-              <p className="text-sm opacity-70 mb-6" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                Comienza invitando coaches al estudio
-              </p>
-              <Button onClick={() => setShowInviteModal(true)}>
-                <Plus size={20} />
-                Invitar Primer Coach
-              </Button>
-            </div>
-          </Card>
-        ) : coachesFiltrados.length === 0 ? (
-          <Card>
-            <div className="text-center py-8">
-              <p style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                No se encontraron coaches con los filtros aplicados
+                No hay coaches en esta categoría
               </p>
             </div>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {coachesFiltrados.map((coach) => (
-              <Card key={coach.id} className="cursor-pointer hover:opacity-80 transition-all"
-                onClick={() => router.push(`/admin/coaches/${coach.id}`)}>
+          <div className="grid gap-4">
+            {coachesFiltrados.map(coach => (
+              <Card key={coach.id}>
                 <div className="flex items-start gap-4">
-                  <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold"
-                    style={{ 
-                      background: 'rgba(174, 63, 33, 0.2)',
-                      color: '#AE3F21'
-                    }}>
-                    {coach.avatar_url ? (
-                      <img src={coach.avatar_url} alt={coach.nombre} className="w-full h-full rounded-full object-cover" />
+                  {/* Avatar */}
+                  <div className="w-16 h-16 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{ background: 'rgba(174, 63, 33, 0.2)' }}>
+                    {coach.foto_profesional_url ? (
+                      <img src={coach.foto_profesional_url} alt={coach.nombre} className="w-full h-full rounded-full object-cover" />
                     ) : (
-                      coach.nombre?.charAt(0) || '?'
+                      <UserCog size={32} style={{ color: '#AE3F21' }} />
                     )}
                   </div>
+
+                  {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <h3 className="font-bold truncate" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                        {coach.nombre} {coach.apellidos}
-                      </h3>
-                      <span className="px-2 py-1 rounded text-xs font-semibold whitespace-nowrap"
-                        style={{
-                          background: coach.estado === 'activo' ? 'rgba(16, 185, 129, 0.2)' :
-                                     coach.estado === 'pendiente' ? 'rgba(245, 158, 11, 0.2)' : 
-                                     'rgba(107, 114, 128, 0.2)',
-                          color: coach.estado === 'activo' ? '#10b981' :
-                                coach.estado === 'pendiente' ? '#f59e0b' : '#6b7280'
-                        }}>
-                        {coach.estado}
-                      </span>
-                    </div>
-                    {coach.es_head_coach && (
-                      <div className="mb-2">
-                        <span className="px-2 py-1 rounded text-xs font-semibold"
-                          style={{ background: 'rgba(174, 63, 33, 0.2)', color: '#AE3F21' }}>
-                          🏆 Head Coach
-                        </span>
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="font-bold text-lg" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                          {coach.nombre} {coach.apellidos}
+                        </h3>
+                        <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                          {coach.email}
+                        </p>
                       </div>
-                    )}
-                    <p className="text-sm mb-1 truncate" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                      {coach.email}
-                    </p>
-                    {coach.telefono && (
-                      <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                        {coach.telefono}
-                      </p>
-                    )}
+                      
+                      {/* Estado badge */}
+                      <div className="px-3 py-1 rounded-full text-xs font-bold"
+                        style={{
+                          background: coach.estado === 'activo' ? 'rgba(16, 185, 129, 0.2)' : 
+                                     coach.estado === 'pendiente' ? 'rgba(245, 158, 11, 0.2)' :
+                                     'rgba(107, 114, 128, 0.2)',
+                          color: coach.estado === 'activo' ? '#10b981' : 
+                                 coach.estado === 'pendiente' ? '#f59e0b' : 
+                                 '#6b7280'
+                        }}>
+                        {coach.estado === 'activo' ? '✓ Activo' : 
+                         coach.estado === 'pendiente' ? '⏳ Pendiente' : 
+                         '◯ Inactivo'}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-4 text-sm mb-3">
+                      {coach.telefono && (
+                        <span style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                          📱 {coach.telefono}
+                        </span>
+                      )}
+                      {coach.años_experiencia && (
+                        <span style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                          🏆 {coach.años_experiencia} años exp.
+                        </span>
+                      )}
+                      {coach.especialidades && coach.especialidades.length > 0 && (
+                        <span style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                          💪 {coach.especialidades.length} especialidades
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Botones de acción */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => router.push(`/admin/coaches/${coach.id}`)}
+                        className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+                        style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                        <Eye size={16} />
+                        Ver Detalle
+                      </button>
+
+                      {coach.estado === 'pendiente' && (
+                        <>
+                          <button
+                            className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+                            style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontFamily: 'Montserrat, sans-serif' }}>
+                            <CheckCircle size={16} />
+                            Aprobar
+                          </button>
+                          <button
+                            className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+                            style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
+                            <XCircle size={16} />
+                            Rechazar
+                          </button>
+                        </>
+                      )}
+
+                      {/* Botón Eliminar (para pruebas) */}
+                      <button
+                        onClick={() => handleEliminarCoach(coach.id)}
+                        disabled={deleting === coach.id}
+                        className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2 ml-auto"
+                        style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
+                        {deleting === coach.id ? (
+                          <><Loader2 size={16} className="animate-spin" /> Eliminando...</>
+                        ) : (
+                          <><Trash2 size={16} /> Eliminar</>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -450,226 +509,132 @@ export default function CoachesPage() {
         {/* Invitaciones Pendientes */}
         {invitaciones.filter(i => i.estado === 'pendiente').length > 0 && (
           <div>
-            <h2 className="text-2xl font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+            <h2 className="text-xl font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
               Invitaciones Pendientes
             </h2>
-            <div className="space-y-3">
-              {invitaciones.filter(i => i.estado === 'pendiente').map((inv) => {
-                const diasRestantes = Math.ceil((new Date(inv.expira_en) - new Date()) / (1000 * 60 * 60 * 24))
-                
-                return (
-                  <Card key={inv.id}>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <p className="font-semibold mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                          {inv.email}
-                        </p>
-                        <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                          <span className="inline-block px-2 py-1 rounded text-xs mr-2"
-                            style={{ background: 'rgba(174, 63, 33, 0.2)', color: '#AE3F21' }}>
-                            {inv.categoria}
-                          </span>
-                          Expira en {diasRestantes} día{diasRestantes !== 1 ? 's' : ''}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleReenviarInvitacion(inv.id)}
-                          className="px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all hover:opacity-80"
-                          style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6' }}>
-                          <RefreshCw size={16} />
-                          Reenviar
-                        </button>
-                        <button
-                          onClick={() => handleCancelarInvitacion(inv.id)}
-                          className="px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all hover:opacity-80"
-                          style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}>
-                          <Ban size={16} />
-                          Cancelar
-                        </button>
-                      </div>
+            <div className="grid gap-3">
+              {invitaciones.filter(i => i.estado === 'pendiente').map(inv => (
+                <Card key={inv.id}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                        {inv.email}
+                      </p>
+                      <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                        {inv.categoria} • Expira: {new Date(inv.expira_en).toLocaleDateString()}
+                      </p>
                     </div>
-                  </Card>
-                )
-              })}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleReenviarInvitacion(inv.id)}
+                        className="px-3 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-80"
+                        style={{ background: 'rgba(156, 122, 94, 0.3)', color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                        <Send size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleCancelarInvitacion(inv.id)}
+                        className="px-3 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-80"
+                        style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
+                        <Ban size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
             </div>
           </div>
         )}
       </div>
 
-      {/* Modal de Invitación */}
+      {/* Modal de Invitación (mantener el existente) */}
       {showInviteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0, 0, 0, 0.8)' }}
-          onClick={() => !sendingInvite && setShowInviteModal(false)}>
-          <div className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
-            <Card>
-              <form onSubmit={handleInviteSubmit} className="space-y-5">
-                {/* Header */}
-                <div className="flex items-center justify-between pb-4 border-b"
-                  style={{ borderColor: 'rgba(156, 122, 94, 0.2)' }}>
-                  <div>
-                    <h3 className="text-xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                      Invitar Nuevo Coach
-                    </h3>
-                    <p className="text-sm opacity-70 mt-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                      Envía una invitación por email
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowInviteModal(false)}
-                    disabled={sendingInvite}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:opacity-70"
-                    style={{ background: 'rgba(156, 122, 94, 0.2)' }}>
-                    <X size={18} style={{ color: '#B39A72' }} />
-                  </button>
-                </div>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="max-w-md w-full p-6 rounded-2xl" style={{ background: 'rgba(42, 42, 42, 0.95)', border: '1px solid rgba(156, 122, 94, 0.3)' }}>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                Invitar Nuevo Coach
+              </h2>
+              <button onClick={() => setShowInviteModal(false)}>
+                <X size={24} style={{ color: '#B39A72' }} />
+              </button>
+            </div>
 
-                {/* Email */}
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-semibold mb-2"
-                    style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                    <Mail size={16} style={{ color: '#AE3F21' }} />
-                    Email del Coach *
-                  </label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="coach@ejemplo.com"
-                    disabled={sendingInvite}
-                    className="w-full px-4 py-3 rounded-xl text-sm"
-                    style={{
-                      background: 'rgba(156, 122, 94, 0.1)',
-                      border: formErrors.email ? '1px solid #ef4444' : '1px solid rgba(156, 122, 94, 0.2)',
-                      color: '#FFFCF3',
-                      fontFamily: 'Montserrat, sans-serif'
-                    }}
-                    required
-                  />
-                  {formErrors.email && (
-                    <p className="text-xs mt-1" style={{ color: '#ef4444' }}>
-                      {formErrors.email}
-                    </p>
+            <form onSubmit={handleSendInvite} className="space-y-4">
+              {/* Form fields del modal existente... */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: '#FFFCF3' }}>Email *</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  className="w-full px-4 py-3 rounded-xl"
+                  style={{ background: 'rgba(156, 122, 94, 0.1)', border: '1px solid rgba(156, 122, 94, 0.3)', color: '#FFFCF3' }}
+                  placeholder="coach@email.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: '#FFFCF3' }}>Categoría *</label>
+                <select
+                  value={formData.categoria}
+                  onChange={(e) => setFormData({...formData, categoria: e.target.value})}
+                  className="w-full px-4 py-3 rounded-xl"
+                  style={{ background: 'rgba(156, 122, 94, 0.1)', border: '1px solid rgba(156, 122, 94, 0.3)', color: '#FFFCF3' }}>
+                  <option value="cycling">Cycling</option>
+                  <option value="funcional">Funcional</option>
+                  <option value="ambos">Ambos</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: '#FFFCF3' }}>Expira en</label>
+                <select
+                  value={formData.expiracion}
+                  onChange={(e) => setFormData({...formData, expiracion: e.target.value})}
+                  className="w-full px-4 py-3 rounded-xl"
+                  style={{ background: 'rgba(156, 122, 94, 0.1)', border: '1px solid rgba(156, 122, 94, 0.3)', color: '#FFFCF3' }}>
+                  <option value="7">7 días</option>
+                  <option value="15">15 días</option>
+                  <option value="30">30 días</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: '#FFFCF3' }}>Mensaje (opcional)</label>
+                <textarea
+                  value={formData.mensaje}
+                  onChange={(e) => setFormData({...formData, mensaje: e.target.value})}
+                  rows="3"
+                  className="w-full px-4 py-3 rounded-xl resize-none"
+                  style={{ background: 'rgba(156, 122, 94, 0.1)', border: '1px solid rgba(156, 122, 94, 0.3)', color: '#FFFCF3' }}
+                  placeholder="Mensaje personalizado..."/>
+              </div>
+
+              {formErrors.submit && (
+                <p className="text-sm" style={{ color: '#ef4444' }}>{formErrors.submit}</p>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowInviteModal(false)}
+                  className="flex-1 px-4 py-3 rounded-xl font-semibold"
+                  style={{ background: 'rgba(156, 122, 94, 0.3)', color: '#B39A72' }}>
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={sendingInvite}
+                  className="flex-1 px-4 py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+                  style={{ background: '#AE3F21', color: '#FFFCF3' }}>
+                  {sendingInvite ? (
+                    <><Loader2 size={20} className="animate-spin" /> Enviando...</>
+                  ) : (
+                    <><Send size={20} /> Enviar Invitación</>
                   )}
-                </div>
-
-                {/* Categoría */}
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-semibold mb-2"
-                    style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                    <UserCog size={16} style={{ color: '#AE3F21' }} />
-                    Categoría *
-                  </label>
-                  <select
-                    value={formData.categoria}
-                    onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
-                    disabled={sendingInvite}
-                    className="w-full px-4 py-3 rounded-xl text-sm"
-                    style={{
-                      background: 'rgba(156, 122, 94, 0.1)',
-                      border: '1px solid rgba(156, 122, 94, 0.2)',
-                      color: '#FFFCF3',
-                      fontFamily: 'Montserrat, sans-serif'
-                    }}
-                    required>
-                    <option value="cycling">🚴 Cycling</option>
-                    <option value="funcional">💪 Funcional</option>
-                    <option value="ambos">🔥 Ambos</option>
-                  </select>
-                </div>
-
-                {/* Expiración */}
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-semibold mb-2"
-                    style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                    <Calendar size={16} style={{ color: '#AE3F21' }} />
-                    Link Válido Por
-                  </label>
-                  <select
-                    value={formData.expiracion}
-                    onChange={(e) => setFormData({ ...formData, expiracion: e.target.value })}
-                    disabled={sendingInvite}
-                    className="w-full px-4 py-3 rounded-xl text-sm"
-                    style={{
-                      background: 'rgba(156, 122, 94, 0.1)',
-                      border: '1px solid rgba(156, 122, 94, 0.2)',
-                      color: '#FFFCF3',
-                      fontFamily: 'Montserrat, sans-serif'
-                    }}>
-                    <option value="7">7 días</option>
-                    <option value="15">15 días</option>
-                    <option value="30">30 días</option>
-                  </select>
-                </div>
-
-                {/* Mensaje */}
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-semibold mb-2"
-                    style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                    <Send size={16} style={{ color: '#AE3F21' }} />
-                    Mensaje Personalizado (Opcional)
-                  </label>
-                  <textarea
-                    value={formData.mensaje}
-                    onChange={(e) => setFormData({ ...formData, mensaje: e.target.value })}
-                    placeholder="Ej: Estamos emocionados de que te unas a nuestro equipo..."
-                    disabled={sendingInvite}
-                    rows={3}
-                    className="w-full px-4 py-3 rounded-xl text-sm resize-none"
-                    style={{
-                      background: 'rgba(156, 122, 94, 0.1)',
-                      border: '1px solid rgba(156, 122, 94, 0.2)',
-                      color: '#FFFCF3',
-                      fontFamily: 'Montserrat, sans-serif'
-                    }}
-                  />
-                </div>
-
-                {/* Botones */}
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowInviteModal(false)}
-                    disabled={sendingInvite}
-                    className="flex-1 px-4 py-3 rounded-xl font-semibold transition-all"
-                    style={{
-                      background: 'rgba(156, 122, 94, 0.2)',
-                      color: '#B39A72',
-                      fontFamily: 'Montserrat, sans-serif',
-                      cursor: sendingInvite ? 'not-allowed' : 'pointer',
-                      opacity: sendingInvite ? 0.5 : 1
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={sendingInvite}
-                    className="flex-1 px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
-                    style={{
-                      background: sendingInvite ? 'rgba(174, 63, 33, 0.5)' : '#AE3F21',
-                      color: '#FFFCF3',
-                      fontFamily: 'Montserrat, sans-serif',
-                      cursor: sendingInvite ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    {sendingInvite ? (
-                      <>
-                        <Loader2 size={18} className="animate-spin" />
-                        Enviando...
-                      </>
-                    ) : (
-                      <>
-                        <Send size={18} />
-                        Enviar
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </Card>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
