@@ -5,35 +5,14 @@ export async function POST(request) {
   try {
     console.log('🚀 [API] Iniciando complete-onboarding...')
 
-    // Extraer body
     const body = await request.json()
-    console.log('📦 [API] Body completo recibido:', JSON.stringify(body, null, 2))
+    console.log('📦 [API] Body recibido')
     
     const { token, formData, invitacionId } = body
 
-    // ⚠️ DEBUG CRÍTICO
-    console.log('🔍 [API] Token:', token)
-    console.log('🔍 [API] InvitacionId:', invitacionId)
-    console.log('🔍 [API] FormData keys:', formData ? Object.keys(formData) : 'NO FORMDATA')
-    console.log('🔍 [API] FormData.email:', formData?.email)
-    console.log('🔍 [API] FormData.password:', formData?.password ? '***existe***' : 'NO EXISTE')
-    console.log('🔍 [API] FormData.nombre:', formData?.nombre)
-    console.log('🔍 [API] FormData.apellidos:', formData?.apellidos)
-
-    // Validar que formData existe
-    if (!formData) {
+    if (!formData || !formData.email) {
       return NextResponse.json(
-        { error: 'FormData no recibido' },
-        { status: 400 }
-      )
-    }
-
-    // Validar email específicamente
-    if (!formData.email) {
-      console.error('❌ [API] Email faltante en formData')
-      console.error('❌ [API] FormData completo:', JSON.stringify(formData, null, 2))
-      return NextResponse.json(
-        { error: 'Email es requerido en formData' },
+        { error: 'FormData o email faltante' },
         { status: 400 }
       )
     }
@@ -51,7 +30,7 @@ export async function POST(request) {
     )
 
     // 1. Verificar invitación
-    console.log('🔍 [API] Verificando token:', token)
+    console.log('🔍 [API] Verificando token...')
     const { data: invitation, error: invError } = await supabase
       .from('coach_invitations')
       .select('*')
@@ -71,9 +50,6 @@ export async function POST(request) {
 
     // 2. Crear usuario en Auth
     console.log('👤 [API] Creando usuario en Auth...')
-    console.log('👤 [API] Con email:', formData.email)
-    console.log('👤 [API] Con password:', formData.password ? 'presente' : 'AUSENTE')
-    
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: formData.email,
       password: formData.password,
@@ -87,7 +63,6 @@ export async function POST(request) {
 
     if (authError || !authData.user) {
       console.error('❌ [API] Error creando usuario:', authError)
-      console.error('❌ [API] authError completo:', JSON.stringify(authError, null, 2))
       return NextResponse.json(
         { error: 'Error al crear usuario: ' + (authError?.message || 'Desconocido') },
         { status: 500 }
@@ -97,11 +72,48 @@ export async function POST(request) {
     const userId = authData.user.id
     console.log('✅ [API] Usuario creado:', userId)
 
-    // 3. SUBIR ARCHIVOS PRIMERO
+    // 3. SUBIR ARCHIVOS - SEPARADOS POR TIPO
     console.log('📤 [API] Subiendo archivos...')
     const uploadedFiles = {}
     
-    const uploadFile = async (file, folder, fileName) => {
+    // Función para subir a AVATARS (público)
+    const uploadAvatar = async (file) => {
+      if (!file || typeof file === 'string') return null
+      
+      try {
+        let fileToUpload = file
+        if (file.startsWith && file.startsWith('data:')) {
+          const response = await fetch(file)
+          const blob = await response.blob()
+          fileToUpload = blob
+        }
+
+        const fileExt = 'jpg'
+        const fileName = `${userId}-${Date.now()}.${fileExt}`
+        const filePath = `${userId}/${fileName}`
+
+        console.log('📸 [API] Subiendo avatar a bucket "avatars":', filePath)
+
+        const { data, error } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, fileToUpload, { upsert: true })
+
+        if (error) throw error
+
+        const { data: urlData } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(filePath)
+
+        console.log('✅ [API] Avatar subido:', urlData.publicUrl)
+        return urlData.publicUrl
+      } catch (error) {
+        console.error('❌ [API] Error subiendo avatar:', error)
+        return null
+      }
+    }
+
+    // Función para subir DOCUMENTOS (privado)
+    const uploadDocument = async (file, folder, fileName) => {
       if (!file || typeof file === 'string') return null
       
       try {
@@ -115,6 +127,8 @@ export async function POST(request) {
         const fileExt = fileName.split('.').pop()
         const filePath = `${folder}/${userId}/${Date.now()}.${fileExt}`
 
+        console.log('📄 [API] Subiendo documento a bucket "coach-documents":', filePath)
+
         const { data, error } = await supabase.storage
           .from('coach-documents')
           .upload(filePath, fileToUpload)
@@ -127,29 +141,25 @@ export async function POST(request) {
 
         return urlData.publicUrl
       } catch (error) {
-        console.error('Error uploading file:', error)
+        console.error('❌ [API] Error subiendo documento:', error)
         return null
       }
     }
 
-    // Subir foto de perfil
+    // Subir foto de perfil a AVATARS
     if (formData.foto_perfil) {
-      uploadedFiles.foto_perfil = await uploadFile(
-        formData.foto_perfil,
-        'profile',
-        'profile.jpg'
-      )
+      uploadedFiles.foto_perfil = await uploadAvatar(formData.foto_perfil)
     }
 
-    // Subir documentos
+    // Subir documentos a COACH-DOCUMENTS
     if (formData.ine_frente) {
-      uploadedFiles.ine_frente = await uploadFile(formData.ine_frente, 'documents', 'ine_frente.jpg')
+      uploadedFiles.ine_frente = await uploadDocument(formData.ine_frente, 'documents', 'ine_frente.jpg')
     }
     if (formData.ine_reverso) {
-      uploadedFiles.ine_reverso = await uploadFile(formData.ine_reverso, 'documents', 'ine_reverso.jpg')
+      uploadedFiles.ine_reverso = await uploadDocument(formData.ine_reverso, 'documents', 'ine_reverso.jpg')
     }
     if (formData.comprobante_domicilio) {
-      uploadedFiles.comprobante_domicilio = await uploadFile(formData.comprobante_domicilio, 'documents', 'comprobante.pdf')
+      uploadedFiles.comprobante_domicilio = await uploadDocument(formData.comprobante_domicilio, 'documents', 'comprobante.pdf')
     }
 
     console.log('✅ [API] Archivos subidos:', Object.keys(uploadedFiles))
@@ -228,7 +238,7 @@ export async function POST(request) {
           let archivoUrl = null
           
           if (cert.archivo) {
-            archivoUrl = await uploadFile(cert.archivo, 'certifications', 'cert.pdf')
+            archivoUrl = await uploadDocument(cert.archivo, 'certifications', 'cert.pdf')
           }
 
           return {
