@@ -46,40 +46,15 @@ export default function AdminCoachesPage() {
       setError(null)
 
       const { data, error } = await supabase
-        .from('coaches')
-        .select(`
-          *,
-          profile:profiles!coaches_id_fkey(
-            id,
-            email,
-            nombre,
-            apellidos,
-            telefono,
-            avatar_url
-          ),
-          aprobador:profiles!coaches_aprobado_por_fkey(
-            nombre,
-            apellidos
-          )
-        `)
-        .order('created_at', { ascending: false })
-
+        .from('coaches_complete')
+        .select('*')
+        .order('coach_created_at', { ascending: false })
+      
       if (error) throw error
-
-      const coachesTransformados = (data || []).map(coach => ({
-        ...coach,
-        email: coach.profile?.email || '',
-        nombre: coach.profile?.nombre || '',
-        apellidos: coach.profile?.apellidos || '',
-        telefono: coach.profile?.telefono || '',
-        avatar_url: coach.profile?.avatar_url || null,
-        aprobado_por_nombre: coach.aprobador 
-          ? `${coach.aprobador.nombre} ${coach.aprobador.apellidos}`.trim()
-          : null
-      }))
+      
+      setCoaches(data || [])
 
       console.log('✅ Coaches cargados:', coachesTransformados.length)
-      setCoaches(coachesTransformados)
       setLoading(false)
     } catch (error) {
       console.error('Error cargando coaches:', error)
