@@ -14,7 +14,6 @@ export default function Step6Documentos({ data, updateData, nextStep, prevStep }
   const validateForm = () => {
     const newErrors = {}
 
-    // Obligatorios
     if (!data.ine_frente) {
       newErrors.ine_frente = 'La INE (frente) es obligatoria'
     }
@@ -67,7 +66,13 @@ export default function Step6Documentos({ data, updateData, nextStep, prevStep }
       return
     }
 
-    updateData({ [field]: file })
+    // ✅ CAMBIO CRÍTICO: Convertir a base64 antes de guardar
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const base64String = reader.result
+      updateData({ [field]: base64String })  // ✅ Guardar base64 en lugar de File
+    }
+    reader.readAsDataURL(file)
 
     // Limpiar error
     const newErrors = { ...errors }
@@ -80,6 +85,22 @@ export default function Step6Documentos({ data, updateData, nextStep, prevStep }
     if (ref.current) {
       ref.current.value = ''
     }
+  }
+
+  const getFileName = (field) => {
+    const file = data[field]
+    if (!file) return null
+    
+    // Si es base64, extraer tipo de archivo
+    if (typeof file === 'string' && file.startsWith('data:')) {
+      const match = file.match(/data:([^;]+);/)
+      if (match) {
+        const mimeType = match[1]
+        if (mimeType.includes('pdf')) return 'Archivo PDF'
+        if (mimeType.includes('image')) return 'Imagen'
+      }
+    }
+    return 'Archivo subido'
   }
 
   const renderFileUpload = (field, label, required, ref, description) => {
@@ -108,34 +129,32 @@ export default function Step6Documentos({ data, updateData, nextStep, prevStep }
         />
 
         {file ? (
-          <div
-            className="p-4 rounded-xl flex items-center justify-between"
-            style={{ background: 'rgba(16, 185, 129, 0.1)', border: '2px solid #10b981' }}>
-            <div className="flex items-center gap-3 flex-1">
-              <FileText size={24} style={{ color: '#10b981' }} />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm truncate" style={{ color: '#10b981', fontFamily: 'Montserrat, sans-serif' }}>
-                  {file.name}
+          <div className="p-4 rounded-xl flex items-center justify-between" style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+            <div className="flex items-center gap-3">
+              <CheckCircle size={20} style={{ color: '#10b981' }} />
+              <div>
+                <p className="text-sm font-medium" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                  {getFileName(field)}
                 </p>
-                <p className="text-xs" style={{ color: '#666', fontFamily: 'Montserrat, sans-serif' }}>
-                  {(file.size / 1024 / 1024).toFixed(2)} MB
+                <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Archivo cargado correctamente
                 </p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => removeFile(field, ref)}
-              className="p-2 rounded-lg transition-all hover:bg-red-500/20"
-              style={{ color: '#ef4444' }}>
-              <X size={20} />
+              className="p-2 rounded-lg hover:opacity-80 transition-all"
+              style={{ background: 'rgba(239, 68, 68, 0.2)' }}>
+              <X size={18} style={{ color: '#ef4444' }} />
             </button>
           </div>
         ) : (
           <label
             htmlFor={`file-${field}`}
-            className="flex flex-col items-center justify-center p-6 rounded-xl cursor-pointer transition-all hover:opacity-80"
+            className="flex flex-col items-center justify-center p-8 rounded-xl cursor-pointer transition-all hover:opacity-80"
             style={{
-              background: 'rgba(156, 122, 94, 0.1)',
+              background: 'rgba(42, 42, 42, 0.8)',
               border: error ? '2px dashed #ef4444' : '2px dashed rgba(156, 122, 94, 0.5)'
             }}>
             <Upload size={32} style={{ color: error ? '#ef4444' : '#B39A72' }} className="mb-2" />
