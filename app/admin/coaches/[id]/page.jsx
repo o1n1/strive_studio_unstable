@@ -69,6 +69,8 @@ export default function CoachDetailPage() {
       }
 
       setCoach(coachTransformado)
+      console.log('🖼️ Coach completo:', coachTransformado)
+      console.log('🖼️ Avatar URL:', coachTransformado.avatar_url)
       setLoading(false)
     } catch (error) {
       console.error('❌ Error cargando datos del coach:', error)
