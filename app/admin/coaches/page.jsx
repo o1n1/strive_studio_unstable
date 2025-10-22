@@ -28,46 +28,52 @@ export default function CoachesPage() {
 
   const cargarCoaches = async () => {
     try {
+      console.log('🔄 Cargando coaches...')
       setLoading(true)
       setError(null)
 
-      console.log('🔵 Cargando coaches...')
-
-      // Query CORREGIDO: usar LEFT JOIN en lugar de INNER JOIN
-      // para no perder coaches si falta el perfil
-      const { data, error: queryError } = await supabase
+      const { data, error } = await supabase
         .from('coaches')
         .select(`
           *,
-          profile:profiles(
+          profile:profiles!coaches_id_fkey(
+            id,
+            email,
             nombre,
             apellidos,
-            email,
+            telefono,
             avatar_url
+          ),
+          aprobador:profiles!coaches_aprobado_por_fkey(
+            nombre,
+            apellidos
           )
         `)
         .order('created_at', { ascending: false })
 
-      if (queryError) {
-        console.error('❌ Error en query:', queryError)
-        throw queryError
+      if (error) {
+        console.error('❌ Error en query:', error)
+        throw error
       }
 
-      console.log('✅ Coaches cargados:', data?.length || 0)
-      console.log('📊 Datos recibidos:', data)
+      const coachesTransformados = (data || []).map(coach => ({
+        ...coach,
+        email: coach.profile?.email || '',
+        nombre: coach.profile?.nombre || '',
+        apellidos: coach.profile?.apellidos || '',
+        telefono: coach.profile?.telefono || '',
+        avatar_url: coach.profile?.avatar_url || null,
+        aprobado_por_nombre: coach.aprobador 
+          ? `${coach.aprobador.nombre} ${coach.aprobador.apellidos}`.trim()
+          : null
+      }))
 
-      // Validar que data existe
-      if (!data) {
-        console.warn('⚠️ No se recibieron datos')
-        setCoaches([])
-        return
-      }
-
-      setCoaches(data)
-    } catch (err) {
-      console.error('❌ Error en cargarCoaches:', err)
-      setError(err.message || 'Error desconocido al cargar coaches')
-    } finally {
+      console.log('✅ Coaches cargados:', coachesTransformados.length)
+      setCoaches(coachesTransformados)
+      setLoading(false)
+    } catch (error) {
+      console.error('❌ Error en cargarCoaches:', error)
+      setError(error.message)
       setLoading(false)
     }
   }
