@@ -2,7 +2,6 @@
 
 import { useState, useRef } from 'react'
 import { User, Phone, Calendar, MapPin, FileText, Users, Upload, X, AlertCircle, Camera } from 'lucide-react'
-import Image from 'next/image'
 
 export default function Step2InfoPersonal({ data, updateData, nextStep, prevStep }) {
   const [errors, setErrors] = useState({})
@@ -95,12 +94,12 @@ export default function Step2InfoPersonal({ data, updateData, nextStep, prevStep
       return
     }
 
-    updateData({ foto_perfil: file })
-
-    // Crear preview
+    // ✅ CAMBIO CRÍTICO: Convertir a base64 antes de guardar
     const reader = new FileReader()
     reader.onloadend = () => {
-      setPreviewUrl(reader.result)
+      const base64String = reader.result
+      updateData({ foto_perfil: base64String })  // ✅ Guardar base64 en lugar de File
+      setPreviewUrl(base64String)  // ✅ También usar para preview
     }
     reader.readAsDataURL(file)
 
@@ -284,8 +283,8 @@ export default function Step2InfoPersonal({ data, updateData, nextStep, prevStep
                 color: '#FFFCF3',
                 fontFamily: 'Montserrat, sans-serif'
               }}
-              placeholder="5551234567"
-              maxLength="10"
+              placeholder="5512345678"
+              maxLength={10}
             />
           </div>
           {errors.telefono && (
@@ -307,7 +306,7 @@ export default function Step2InfoPersonal({ data, updateData, nextStep, prevStep
               type="date"
               value={data.fecha_nacimiento}
               onChange={(e) => updateData({ fecha_nacimiento: e.target.value })}
-              max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+              max={new Date().toISOString().split('T')[0]}
               className="w-full pl-12 pr-4 py-3 rounded-xl text-sm"
               style={{
                 background: 'rgba(42, 42, 42, 0.8)',
@@ -331,21 +330,21 @@ export default function Step2InfoPersonal({ data, updateData, nextStep, prevStep
           Dirección Completa *
         </label>
         <div className="relative">
-          <div className="absolute top-3 left-0 pl-4 flex items-center pointer-events-none">
+          <div className="absolute top-3 left-0 pl-4 pointer-events-none">
             <MapPin size={20} style={{ color: '#B39A72' }} />
           </div>
           <textarea
             value={data.direccion}
             onChange={(e) => updateData({ direccion: e.target.value })}
-            rows="3"
-            className="w-full pl-12 pr-4 py-3 rounded-xl text-sm resize-none"
+            rows={3}
+            className="w-full pl-12 pr-4 py-3 rounded-xl text-sm"
             style={{
               background: 'rgba(42, 42, 42, 0.8)',
               border: errors.direccion ? '1px solid #ef4444' : '1px solid rgba(156, 122, 94, 0.3)',
               color: '#FFFCF3',
               fontFamily: 'Montserrat, sans-serif'
             }}
-            placeholder="Calle, Número, Colonia, CP, Ciudad, Estado"
+            placeholder="Calle, número, colonia, ciudad, estado, CP"
           />
         </div>
         {errors.direccion && (
@@ -358,7 +357,7 @@ export default function Step2InfoPersonal({ data, updateData, nextStep, prevStep
       {/* RFC */}
       <div>
         <label className="block text-sm font-medium mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-          RFC (Para facturación) *
+          RFC *
         </label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -376,7 +375,7 @@ export default function Step2InfoPersonal({ data, updateData, nextStep, prevStep
               fontFamily: 'Montserrat, sans-serif'
             }}
             placeholder="ABCD123456XXX"
-            maxLength="13"
+            maxLength={13}
           />
         </div>
         {errors.rfc && (
@@ -387,8 +386,8 @@ export default function Step2InfoPersonal({ data, updateData, nextStep, prevStep
       </div>
 
       {/* Contacto de Emergencia */}
-      <div className="p-6 rounded-xl" style={{ background: 'rgba(156, 122, 94, 0.1)', border: '1px solid rgba(156, 122, 94, 0.3)' }}>
-        <div className="flex items-center gap-2 mb-4">
+      <div className="p-6 rounded-xl space-y-6" style={{ background: 'rgba(174, 63, 33, 0.05)', border: '1px solid rgba(174, 63, 33, 0.2)' }}>
+        <div className="flex items-center gap-2">
           <Users size={24} style={{ color: '#AE3F21' }} />
           <h3 className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
             Contacto de Emergencia
@@ -400,19 +399,24 @@ export default function Step2InfoPersonal({ data, updateData, nextStep, prevStep
             <label className="block text-sm font-medium mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
               Nombre Completo *
             </label>
-            <input
-              type="text"
-              value={data.contacto_emergencia_nombre}
-              onChange={(e) => updateData({ contacto_emergencia_nombre: e.target.value })}
-              className="w-full px-4 py-3 rounded-xl text-sm"
-              style={{
-                background: 'rgba(42, 42, 42, 0.8)',
-                border: errors.contacto_emergencia_nombre ? '1px solid #ef4444' : '1px solid rgba(156, 122, 94, 0.3)',
-                color: '#FFFCF3',
-                fontFamily: 'Montserrat, sans-serif'
-              }}
-              placeholder="María Pérez"
-            />
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <User size={20} style={{ color: '#B39A72' }} />
+              </div>
+              <input
+                type="text"
+                value={data.contacto_emergencia_nombre}
+                onChange={(e) => updateData({ contacto_emergencia_nombre: e.target.value })}
+                className="w-full pl-12 pr-4 py-3 rounded-xl text-sm"
+                style={{
+                  background: 'rgba(42, 42, 42, 0.8)',
+                  border: errors.contacto_emergencia_nombre ? '1px solid #ef4444' : '1px solid rgba(156, 122, 94, 0.3)',
+                  color: '#FFFCF3',
+                  fontFamily: 'Montserrat, sans-serif'
+                }}
+                placeholder="María López"
+              />
+            </div>
             {errors.contacto_emergencia_nombre && (
               <p className="text-xs mt-1 flex items-center gap-1" style={{ color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
                 <AlertCircle size={14} /> {errors.contacto_emergencia_nombre}
@@ -424,20 +428,25 @@ export default function Step2InfoPersonal({ data, updateData, nextStep, prevStep
             <label className="block text-sm font-medium mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
               Teléfono *
             </label>
-            <input
-              type="tel"
-              value={data.contacto_emergencia_telefono}
-              onChange={(e) => updateData({ contacto_emergencia_telefono: formatPhone(e.target.value) })}
-              className="w-full px-4 py-3 rounded-xl text-sm"
-              style={{
-                background: 'rgba(42, 42, 42, 0.8)',
-                border: errors.contacto_emergencia_telefono ? '1px solid #ef4444' : '1px solid rgba(156, 122, 94, 0.3)',
-                color: '#FFFCF3',
-                fontFamily: 'Montserrat, sans-serif'
-              }}
-              placeholder="5551234567"
-              maxLength="10"
-            />
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Phone size={20} style={{ color: '#B39A72' }} />
+              </div>
+              <input
+                type="tel"
+                value={data.contacto_emergencia_telefono}
+                onChange={(e) => updateData({ contacto_emergencia_telefono: formatPhone(e.target.value) })}
+                className="w-full pl-12 pr-4 py-3 rounded-xl text-sm"
+                style={{
+                  background: 'rgba(42, 42, 42, 0.8)',
+                  border: errors.contacto_emergencia_telefono ? '1px solid #ef4444' : '1px solid rgba(156, 122, 94, 0.3)',
+                  color: '#FFFCF3',
+                  fontFamily: 'Montserrat, sans-serif'
+                }}
+                placeholder="5512345678"
+                maxLength={10}
+              />
+            </div>
             {errors.contacto_emergencia_telefono && (
               <p className="text-xs mt-1 flex items-center gap-1" style={{ color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
                 <AlertCircle size={14} /> {errors.contacto_emergencia_telefono}
@@ -447,9 +456,10 @@ export default function Step2InfoPersonal({ data, updateData, nextStep, prevStep
         </div>
       </div>
 
-      {/* Error de submit */}
+      {/* Error general */}
       {errors.submit && (
-        <div className="p-4 rounded-xl" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444' }}>
+        <div className="p-4 rounded-xl flex items-center gap-3" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+          <AlertCircle size={20} style={{ color: '#ef4444' }} />
           <p className="text-sm" style={{ color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
             {errors.submit}
           </p>
@@ -457,21 +467,20 @@ export default function Step2InfoPersonal({ data, updateData, nextStep, prevStep
       )}
 
       {/* Botones */}
-      <div className="flex justify-between pt-4">
+      <div className="flex gap-4 pt-6">
         <button
           type="button"
           onClick={prevStep}
-          className="px-8 py-3 rounded-xl font-bold text-lg transition-all hover:opacity-90"
-          style={{ background: '#B39A72', color: '#1a1a1a', fontFamily: 'Montserrat, sans-serif' }}>
-          ← Anterior
+          className="flex-1 px-6 py-3 rounded-xl font-bold transition-all hover:opacity-80"
+          style={{ background: 'rgba(156, 122, 94, 0.2)', color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+          Anterior
         </button>
-
         <button
           type="submit"
           disabled={loading}
-          className="px-8 py-3 rounded-xl font-bold text-lg transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 px-6 py-3 rounded-xl font-bold transition-all hover:opacity-90 disabled:opacity-50"
           style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-          {loading ? 'Guardando...' : 'Continuar →'}
+          {loading ? 'Guardando...' : 'Continuar'}
         </button>
       </div>
     </form>
