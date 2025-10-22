@@ -48,7 +48,7 @@ export default function AdminCoachesPage() {
       const { data, error } = await supabase
         .from('coaches_complete')
         .select('*')
-        .order('coach_created_at', { ascending: false })
+        .order('created_at', { ascending: false })
 
       if (error) throw error
 
