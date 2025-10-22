@@ -7,8 +7,11 @@ import Step2InfoPersonal from './steps/Step2InfoPersonal'
 import Step3InfoProfesional from './steps/Step3InfoProfesional'
 import Step4Certificaciones from './steps/Step4Certificaciones'
 import Step5RedesSociales from './steps/Step5RedesSociales'
+import Step6Documentos from './steps/Step6Documentos'
+import Step7InfoBancaria from './steps/Step7InfoBancaria'
+import Step8FirmaContrato from './steps/Step8FirmaContrato'
 
-const TOTAL_STEPS = 9
+const TOTAL_STEPS = 8 // Actualizado: eliminamos paso de disponibilidad
 
 export default function CoachOnboardingForm({ invitacion, token }) {
   const [currentStep, setCurrentStep] = useState(1)

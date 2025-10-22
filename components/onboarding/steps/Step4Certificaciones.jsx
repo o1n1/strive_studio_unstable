@@ -12,13 +12,12 @@ export default function Step4Certificaciones({ data, updateData, nextStep, prevS
   const validateForm = () => {
     const newErrors = {}
 
+    // Si no hay certificaciones, está bien (opcional)
     if (certificaciones.length === 0) {
-      newErrors.certificaciones = 'Debes agregar al menos una certificación'
-      setErrors(newErrors)
-      return false
+      return true
     }
 
-    // Validar cada certificación
+    // Si hay certificaciones, validar cada una
     let hasErrors = false
     certificaciones.forEach((cert, index) => {
       if (!cert.nombre?.trim()) {

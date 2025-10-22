@@ -10,7 +10,6 @@ const STEP_NAMES = [
   'Redes Sociales',
   'Documentos',
   'Info Bancaria',
-  'Disponibilidad',
   'Firma de Contrato'
 ]
 
