@@ -159,6 +159,46 @@ export default function CoachDetailPage() {
     }
   }
 
+  const handleRenovarContrato = async () => {
+  const tipo = prompt('Tipo de contrato (por_clase/tiempo_completo/medio_tiempo):') || 'por_clase'
+  const sueldo = prompt('Sueldo base (opcional):')
+  const comision = prompt('Comisión por clase (opcional):')
+  const notas = prompt('Notas del nuevo contrato (opcional):')
+
+  if (!confirm('¿Renovar contrato de este coach?')) return
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      const response = await fetch('/api/coaches/renew-contract', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          coachId: params.id,
+          tipo_contrato: tipo,
+          sueldo_base: sueldo ? parseFloat(sueldo) : null,
+          comision_por_clase: comision ? parseFloat(comision) : null,
+          notas: notas || null
+        })
+      })
+  
+      const data = await response.json()
+  
+      if (!response.ok) {
+        throw new Error(data.error || 'Error renovando contrato')
+      }
+  
+      alert('✅ Contrato renovado exitosamente')
+      cargarTodosLosDatos()
+    } catch (error) {
+      console.error('Error:', error)
+      alert('❌ Error: ' + error.message)
+    }
+  }
+
   const getTipoDocumentoLabel = (tipo) => {
     const labels = {
       'ine_frente': 'INE (Frente)',
