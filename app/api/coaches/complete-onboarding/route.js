@@ -312,7 +312,57 @@ export async function POST(request) {
       }
     }
 
-    // 8. ✅ NUEVO: Crear registro de contrato
+    // 8. Generar PDF del contrato
+    console.log('📄 [API] Generando PDF del contrato...')
+    let pdfUrl = null
+    
+    try {
+      // Importar generador dinámicamente (solo en servidor)
+      const { generateCoachContractPDF } = await import('@/lib/pdf/contractGenerator')
+      
+      // Datos temporales del contrato para generar PDF
+      const contratoTemp = {
+        id: crypto.randomUUID(),
+        tipo_contrato: 'por_clase',
+        fecha_inicio: new Date().toISOString(),
+        fecha_firma: new Date().toISOString()
+      }
+
+      const pdfBlob = await generateCoachContractPDF({
+        coach: {
+          nombre: formData.nombre,
+          apellidos: formData.apellidos,
+          email: formData.email,
+          telefono: formData.telefono,
+          rfc: formData.rfc
+        },
+        contrato: contratoTemp,
+        firmaDigital: formData.firma_digital
+      })
+
+      // Subir PDF a storage
+      const pdfPath = `contracts/${userId}/${Date.now()}_contrato_v1.pdf`
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(pdfPath, pdfBlob, {
+          contentType: 'application/pdf',
+          upsert: false
+        })
+
+      if (uploadError) {
+        console.error('⚠️ [API] Error subiendo PDF:', uploadError)
+      } else {
+        const { data: urlData } = supabase.storage
+          .from('documents')
+          .getPublicUrl(pdfPath)
+        pdfUrl = urlData.publicUrl
+        console.log('✅ [API] PDF generado y subido')
+      }
+    } catch (pdfError) {
+      console.error('⚠️ [API] Error generando PDF:', pdfError)
+    }
+
+    // 9. Crear registro de contrato con PDF
     console.log('📄 [API] Creando contrato firmado...')
     const { error: contratoError } = await supabase
       .from('coach_contracts')
@@ -324,13 +374,15 @@ export async function POST(request) {
         firmado: true,
         fecha_firma: new Date().toISOString(),
         firma_digital: formData.firma_digital,
-        vigente: true
+        vigente: true,
+        version: 1,
+        documento_url: pdfUrl
       })
 
     if (contratoError) {
       console.error('⚠️ [API] Error creando contrato:', contratoError)
     } else {
-      console.log('✅ [API] Contrato creado')
+      console.log('✅ [API] Contrato creado con PDF')
     }
 
     // 9. Marcar invitación como usada
