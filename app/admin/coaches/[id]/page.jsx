@@ -33,6 +33,8 @@ export default function CoachDetailPage() {
       setLoading(true)
       setError(null)
 
+      console.log('🔄 Cargando coach con ID:', params.id)
+
       const { data, error } = await supabase
         .from('coaches_complete')
         .select('*')
@@ -41,11 +43,10 @@ export default function CoachDetailPage() {
       
       if (error) throw error
       
+      console.log('✅ Coach cargado:', data)
+      console.log('🖼️ Avatar URL:', data?.avatar_url)
+      
       setCoach(data)
-
-      setCoach(coachTransformado)
-      console.log('🖼️ Coach completo:', coachTransformado)
-      console.log('🖼️ Avatar URL:', coachTransformado.avatar_url)
       setLoading(false)
     } catch (error) {
       console.error('❌ Error cargando datos del coach:', error)
@@ -223,12 +224,22 @@ export default function CoachDetailPage() {
                        coach.estado === 'pendiente' ? '🟡 Pendiente' : 
                        '🔴 Inactivo'}
                     </span>
+                    {coach.es_head_coach && (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold"
+                        style={{ 
+                          background: 'rgba(174, 63, 33, 0.2)', 
+                          color: '#AE3F21',
+                          fontFamily: 'Montserrat, sans-serif'
+                        }}>
+                        👑 Head Coach {coach.categoria_head ? `- ${coach.categoria_head}` : ''}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Contacto */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Info de contacto */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 <div className="flex items-center gap-2">
                   <Mail size={16} style={{ color: '#B39A72' }} />
                   <span style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
@@ -243,167 +254,236 @@ export default function CoachDetailPage() {
                     </span>
                   </div>
                 )}
+                {coach.fecha_nacimiento && (
+                  <div className="flex items-center gap-2">
+                    <Calendar size={16} style={{ color: '#B39A72' }} />
+                    <span style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                      {new Date(coach.fecha_nacimiento).toLocaleDateString('es-MX')}
+                    </span>
+                  </div>
+                )}
+                {coach.direccion && (
+                  <div className="flex items-center gap-2">
+                    <MapPin size={16} style={{ color: '#B39A72' }} />
+                    <span style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                      {coach.direccion}
+                    </span>
+                  </div>
+                )}
               </div>
 
-              {/* Bio */}
-              {coach.bio && (
-                <div className="mt-4 p-4 rounded-xl" style={{ background: 'rgba(156, 122, 94, 0.1)' }}>
-                  <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    {coach.bio}
-                  </p>
+              {/* Redes sociales */}
+              {(coach.instagram || coach.facebook || coach.tiktok) && (
+                <div className="flex gap-3 mt-4">
+                  {coach.instagram && (
+                    <a 
+                      href={`https://instagram.com/${coach.instagram}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 rounded-lg transition-all hover:opacity-80"
+                      style={{ background: 'rgba(174, 63, 33, 0.2)' }}>
+                      <Instagram size={18} style={{ color: '#AE3F21' }} />
+                    </a>
+                  )}
+                  {coach.facebook && (
+                    <a 
+                      href={`https://facebook.com/${coach.facebook}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 rounded-lg transition-all hover:opacity-80"
+                      style={{ background: 'rgba(174, 63, 33, 0.2)' }}>
+                      <Facebook size={18} style={{ color: '#AE3F21' }} />
+                    </a>
+                  )}
+                  {coach.tiktok && (
+                    <a 
+                      href={`https://tiktok.com/@${coach.tiktok}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 rounded-lg transition-all hover:opacity-80"
+                      style={{ background: 'rgba(174, 63, 33, 0.2)' }}>
+                      <Share2 size={18} style={{ color: '#AE3F21' }} />
+                    </a>
+                  )}
                 </div>
               )}
             </div>
           </div>
+
+          {/* Bio */}
+          {coach.bio && (
+            <div className="mt-6 pt-6 border-t" style={{ borderColor: 'rgba(156, 122, 94, 0.2)' }}>
+              <h3 className="text-sm font-semibold mb-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Biografía
+              </h3>
+              <p className="text-sm" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                {coach.bio}
+              </p>
+            </div>
+          )}
         </Card>
 
-        {/* Grid de información */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Información Profesional */}
+        <Card>
+          <h2 className="text-xl font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+            Información Profesional
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="p-4 rounded-lg" style={{ background: 'rgba(174, 63, 33, 0.1)' }}>
+              <p className="text-xs mb-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Años de experiencia
+              </p>
+              <p className="text-2xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                {coach.años_experiencia || 0}
+              </p>
+            </div>
+            
+            <div className="p-4 rounded-lg" style={{ background: 'rgba(174, 63, 33, 0.1)' }}>
+              <p className="text-xs mb-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Rating promedio
+              </p>
+              <p className="text-2xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                ⭐ {coach.rating_promedio?.toFixed(1) || '0.0'}
+              </p>
+            </div>
+            
+            <div className="p-4 rounded-lg" style={{ background: 'rgba(174, 63, 33, 0.1)' }}>
+              <p className="text-xs mb-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Total clases
+              </p>
+              <p className="text-2xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                {coach.total_clases || 0}
+              </p>
+            </div>
+          </div>
+
           {/* Especialidades */}
           {coach.especialidades && coach.especialidades.length > 0 && (
-            <Card>
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2" 
-                style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                <Award size={20} style={{ color: '#AE3F21' }} />
+            <div className="mb-6">
+              <h3 className="text-sm font-semibold mb-3" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
                 Especialidades
               </h3>
               <div className="flex flex-wrap gap-2">
                 {coach.especialidades.map((esp, idx) => (
-                  <span key={idx} className="px-3 py-1 rounded-full text-xs font-semibold"
+                  <span 
+                    key={idx}
+                    className="px-3 py-1 rounded-full text-xs font-semibold"
                     style={{ background: 'rgba(174, 63, 33, 0.2)', color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
                     {esp}
                   </span>
                 ))}
               </div>
-            </Card>
+            </div>
           )}
 
-          {/* Redes Sociales */}
-          {(coach.instagram || coach.facebook || coach.tiktok) && (
-            <Card>
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2" 
-                style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                <Share2 size={20} style={{ color: '#AE3F21' }} />
-                Redes Sociales
-              </h3>
-              <div className="space-y-2">
-                {coach.instagram && (
-                  <a href={`https://instagram.com/${coach.instagram}`} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 hover:opacity-70 transition-opacity">
-                    <Instagram size={16} style={{ color: '#B39A72' }} />
-                    <span style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                      @{coach.instagram}
-                    </span>
-                  </a>
-                )}
-                {coach.facebook && (
-                  <a href={`https://facebook.com/${coach.facebook}`} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 hover:opacity-70 transition-opacity">
-                    <Facebook size={16} style={{ color: '#B39A72' }} />
-                    <span style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                      {coach.facebook}
-                    </span>
-                  </a>
-                )}
-              </div>
-            </Card>
-          )}
+          {/* Contadores */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="text-center p-3 rounded-lg" style={{ background: 'rgba(156, 122, 94, 0.1)' }}>
+              <Award size={20} className="mx-auto mb-1" style={{ color: '#B39A72' }} />
+              <p className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                {coach.total_certificaciones || 0}
+              </p>
+              <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Certificaciones
+              </p>
+            </div>
+            
+            <div className="text-center p-3 rounded-lg" style={{ background: 'rgba(156, 122, 94, 0.1)' }}>
+              <FileText size={20} className="mx-auto mb-1" style={{ color: '#B39A72' }} />
+              <p className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                {coach.total_documentos || 0}
+              </p>
+              <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Documentos
+              </p>
+            </div>
+            
+            <div className="text-center p-3 rounded-lg" style={{ background: 'rgba(156, 122, 94, 0.1)' }}>
+              <FileText size={20} className="mx-auto mb-1" style={{ color: '#B39A72' }} />
+              <p className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                {coach.contratos_vigentes || 0}
+              </p>
+              <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Contratos
+              </p>
+            </div>
+            
+            <div className="text-center p-3 rounded-lg" style={{ background: 'rgba(156, 122, 94, 0.1)' }}>
+              <DollarSign size={20} className="mx-auto mb-1" style={{ color: '#B39A72' }} />
+              <p className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                {coach.pagos_pendientes || 0}
+              </p>
+              <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Pagos pendientes
+              </p>
+            </div>
+          </div>
+        </Card>
 
-          {/* Información Bancaria */}
-          {(coach.banco || coach.clabe_encriptada) && (
-            <Card>
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2" 
-                style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                <CreditCard size={20} style={{ color: '#AE3F21' }} />
-                Información Bancaria
-              </h3>
-              <div className="space-y-2">
-                {coach.banco && (
-                  <div>
-                    <label className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                      Banco
-                    </label>
-                    <p style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                      {coach.banco}
-                    </p>
-                  </div>
-                )}
-                {coach.clabe_encriptada && (
-                  <div>
-                    <label className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                      CLABE
-                    </label>
-                    <p style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                      ****{coach.clabe_encriptada.slice(-4)}
-                    </p>
-                  </div>
-                )}
-                {coach.titular_cuenta && (
-                  <div>
-                    <label className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                      Titular
-                    </label>
-                    <p style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                      {coach.titular_cuenta}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </Card>
-          )}
-
-          {/* Datos Administrativos */}
+        {/* Información Administrativa */}
+        {coach.tipo_compensacion && (
           <Card>
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2" 
-              style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              <FileText size={20} style={{ color: '#AE3F21' }} />
-              Datos Administrativos
-            </h3>
-            <div className="space-y-3">
+            <h2 className="text-xl font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              Información Administrativa
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Fecha de registro
-                </label>
-                <p style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  {new Date(coach.created_at).toLocaleDateString('es-MX')}
+                <p className="text-xs mb-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Tipo de compensación
+                </p>
+                <p className="text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                  {coach.tipo_compensacion}
                 </p>
               </div>
               
-              {coach.fecha_aprobacion && (
+              {coach.monto_base && (
                 <div>
-                  <label className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    Fecha de aprobación
-                  </label>
-                  <p style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                    {new Date(coach.fecha_aprobacion).toLocaleDateString('es-MX')}
+                  <p className="text-xs mb-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                    Monto base
+                  </p>
+                  <p className="text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                    ${coach.monto_base.toLocaleString()} MXN
                   </p>
                 </div>
               )}
-
-              {coach.aprobado_por_nombre && (
+              
+              {coach.banco && (
                 <div>
-                  <label className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    Aprobado por
-                  </label>
-                  <p style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                    {coach.aprobado_por_nombre}
+                  <p className="text-xs mb-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                    Banco
+                  </p>
+                  <p className="text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                    {coach.banco}
                   </p>
                 </div>
               )}
-
-              {coach.años_experiencia && (
+              
+              {coach.fecha_ingreso && (
                 <div>
-                  <label className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    Años de experiencia
-                  </label>
-                  <p style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                    {coach.años_experiencia} años
+                  <p className="text-xs mb-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                    Fecha de ingreso
+                  </p>
+                  <p className="text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                    {new Date(coach.fecha_ingreso).toLocaleDateString('es-MX')}
                   </p>
                 </div>
               )}
             </div>
+
+            {coach.notas_internas && (
+              <div className="mt-4 p-3 rounded-lg" style={{ background: 'rgba(251, 191, 36, 0.1)' }}>
+                <p className="text-xs mb-1" style={{ color: '#fbbf24', fontFamily: 'Montserrat, sans-serif' }}>
+                  📝 Notas internas
+                </p>
+                <p className="text-sm" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                  {coach.notas_internas}
+                </p>
+              </div>
+            )}
           </Card>
-        </div>
+        )}
       </div>
     </DashboardLayout>
   )
