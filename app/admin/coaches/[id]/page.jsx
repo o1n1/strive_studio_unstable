@@ -496,35 +496,35 @@ export default function CoachDetailPage() {
               <h2 className="text-xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>Evaluaciones ({evaluaciones.length})</h2>
             </div>
             <div className="space-y-3">
-              {evaluaciones.map((eval) => (
-                <div key={eval.id} className="p-4 rounded-lg border" style={{ borderColor: 'rgba(156, 122, 94, 0.2)' }}>
+              {evaluaciones.map((evaluation) => (
+                <div key={evaluation.id} className="p-4 rounded-lg border" style={{ borderColor: 'rgba(156, 122, 94, 0.2)' }}>
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <h3 className="font-semibold mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>{eval.periodo}</h3>
-                      <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>Evaluado por: {eval.evaluador?.nombre} {eval.evaluador?.apellidos}</p>
-                      <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>{new Date(eval.fecha_evaluacion).toLocaleDateString('es-MX')}</p>
+                      <h3 className="font-semibold mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>{evaluation.periodo}</h3>
+                      <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>Evaluado por: {evaluation.evaluador?.nombre} {evaluation.evaluador?.apellidos}</p>
+                      <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>{new Date(evaluation.fecha_evaluacion).toLocaleDateString('es-MX')}</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                     <div className="text-center p-2 rounded-lg" style={{ background: 'rgba(174, 63, 33, 0.1)' }}>
                       <p className="text-xs mb-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>Puntualidad</p>
-                      <p className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>{eval.puntualidad}/5</p>
+                      <p className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>{evaluation.puntualidad}/5</p>
                     </div>
                     <div className="text-center p-2 rounded-lg" style={{ background: 'rgba(174, 63, 33, 0.1)' }}>
                       <p className="text-xs mb-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>Calidad</p>
-                      <p className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>{eval.calidad_clase}/5</p>
+                      <p className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>{evaluation.calidad_clase}/5</p>
                     </div>
                     <div className="text-center p-2 rounded-lg" style={{ background: 'rgba(174, 63, 33, 0.1)' }}>
                       <p className="text-xs mb-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>Interacción</p>
-                      <p className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>{eval.interaccion_clientes}/5</p>
+                      <p className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>{evaluation.interaccion_clientes}/5</p>
                     </div>
                     <div className="text-center p-2 rounded-lg" style={{ background: 'rgba(174, 63, 33, 0.1)' }}>
                       <p className="text-xs mb-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>Actitud</p>
-                      <p className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>{eval.actitud}/5</p>
+                      <p className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>{evaluation.actitud}/5</p>
                     </div>
                   </div>
-                  {eval.comentarios && (
-                    <p className="text-sm mt-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>{eval.comentarios}</p>
+                  {evaluation.comentarios && (
+                    <p className="text-sm mt-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>{evaluation.comentarios}</p>
                   )}
                 </div>
               ))}
