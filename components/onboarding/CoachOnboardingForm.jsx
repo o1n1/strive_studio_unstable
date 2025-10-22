@@ -11,7 +11,7 @@ import Step6Documentos from './steps/Step6Documentos'
 import Step7InfoBancaria from './steps/Step7InfoBancaria'
 import Step8FirmaContrato from './steps/Step8FirmaContrato'
 
-const TOTAL_STEPS = 8 // Actualizado: eliminamos paso de disponibilidad
+const TOTAL_STEPS = 8
 
 export default function CoachOnboardingForm({ invitacion, token }) {
   const [currentStep, setCurrentStep] = useState(1)
@@ -32,7 +32,7 @@ export default function CoachOnboardingForm({ invitacion, token }) {
     contacto_emergencia_telefono: '',
     foto_perfil: null,
     
-    // Paso 3: Info Profesional (siguiente sesión)
+    // Paso 3: Info Profesional
     bio: '',
     años_experiencia: '',
     especialidades: [],
@@ -58,10 +58,7 @@ export default function CoachOnboardingForm({ invitacion, token }) {
     titular_cuenta: '',
     estado_cuenta: null,
     
-    // Paso 8: Disponibilidad
-    disponibilidad: {},
-    
-    // Paso 9: Contrato
+    // Paso 8: Contrato
     aceptar_terminos: false,
     firma_digital: ''
   })
@@ -128,6 +125,34 @@ export default function CoachOnboardingForm({ invitacion, token }) {
             updateData={updateFormData}
             nextStep={nextStep}
             prevStep={prevStep}
+          />
+        )
+      case 6:
+        return (
+          <Step6Documentos
+            data={formData}
+            updateData={updateFormData}
+            nextStep={nextStep}
+            prevStep={prevStep}
+          />
+        )
+      case 7:
+        return (
+          <Step7InfoBancaria
+            data={formData}
+            updateData={updateFormData}
+            nextStep={nextStep}
+            prevStep={prevStep}
+          />
+        )
+      case 8:
+        return (
+          <Step8FirmaContrato
+            data={formData}
+            updateData={updateFormData}
+            prevStep={prevStep}
+            invitacion={invitacion}
+            token={token}
           />
         )
       default:
