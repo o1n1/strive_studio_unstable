@@ -91,7 +91,8 @@ export async function POST(request) {
         }
 
         const fileExt = fileName.split('.').pop()
-        const filePath = `${userId}/${folder ? folder + '/' : ''}${Date.now()}.${fileExt}`
+        // ✅ CORRECCIÓN: Ruta correcta coaches/userId/archivo.jpg
+        const filePath = `${folder ? folder + '/' : ''}${userId}/${Date.now()}.${fileExt}`
 
         console.log(`📤 Subiendo a bucket: ${bucketName}, ruta: ${filePath}`)
 
@@ -134,7 +135,7 @@ export async function POST(request) {
       uploadedFiles.ine_frente = await uploadFile(
         formData.ine_frente,
         'documents',
-        'coaches', // Carpeta coaches
+        'coaches', // ✅ Carpeta coaches primero
         'ine_frente.jpg'
       )
     }
@@ -211,7 +212,6 @@ export async function POST(request) {
         banco: formData.banco || null,
         clabe_encriptada: formData.clabe || null,
         titular_cuenta: formData.titular_cuenta || null,
-        foto_profesional_url: null, // ❌ Ya no se usa, se obtiene de profiles.avatar_url
         estado: 'pendiente',
         activo: false
       })
@@ -312,7 +312,28 @@ export async function POST(request) {
       }
     }
 
-    // 8. Marcar invitación como usada
+    // 8. ✅ NUEVO: Crear registro de contrato
+    console.log('📄 [API] Creando contrato firmado...')
+    const { error: contratoError } = await supabase
+      .from('coach_contracts')
+      .insert({
+        coach_id: userId,
+        tipo_contrato: 'por_clase',
+        fecha_inicio: new Date().toISOString().split('T')[0],
+        estado: 'activo',
+        firmado: true,
+        fecha_firma: new Date().toISOString(),
+        firma_digital: formData.firma_digital,
+        vigente: true
+      })
+
+    if (contratoError) {
+      console.error('⚠️ [API] Error creando contrato:', contratoError)
+    } else {
+      console.log('✅ [API] Contrato creado')
+    }
+
+    // 9. Marcar invitación como usada
     console.log('✅ [API] Marcando invitación como usada...')
     await supabase
       .from('coach_invitations')
