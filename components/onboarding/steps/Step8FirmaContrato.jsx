@@ -53,7 +53,7 @@ export default function Step8FirmaContrato({ data, updateData, prevStep, invitac
 
     const ctx = canvas.getContext('2d')
     ctx.strokeStyle = '#FFFCF3'
-    ctx.lineWidth = 2
+    ctx.lineWidth = 3
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
 
@@ -68,14 +68,29 @@ export default function Step8FirmaContrato({ data, updateData, prevStep, invitac
     }
   }, [])
 
+  const getCoordinates = (e, canvas) => {
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    
+    if (e.type.includes('touch')) {
+      return {
+        x: (e.touches[0].clientX - rect.left) * scaleX,
+        y: (e.touches[0].clientY - rect.top) * scaleY
+      }
+    }
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY
+    }
+  }
+
   const startDrawing = (e) => {
+    e.preventDefault()
     setIsDrawing(true)
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
-    const rect = canvas.getBoundingClientRect()
-    
-    const x = e.type.includes('mouse') ? e.clientX - rect.left : e.touches[0].clientX - rect.left
-    const y = e.type.includes('mouse') ? e.clientY - rect.top : e.touches[0].clientY - rect.top
+    const { x, y } = getCoordinates(e, canvas)
     
     ctx.beginPath()
     ctx.moveTo(x, y)
@@ -87,17 +102,15 @@ export default function Step8FirmaContrato({ data, updateData, prevStep, invitac
     e.preventDefault()
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
-    const rect = canvas.getBoundingClientRect()
-    
-    const x = e.type.includes('mouse') ? e.clientX - rect.left : e.touches[0].clientX - rect.left
-    const y = e.type.includes('mouse') ? e.clientY - rect.top : e.touches[0].clientY - rect.top
+    const { x, y } = getCoordinates(e, canvas)
     
     ctx.lineTo(x, y)
     ctx.stroke()
     setHasSignature(true)
   }
 
-  const stopDrawing = () => {
+  const stopDrawing = (e) => {
+    e.preventDefault()
     setIsDrawing(false)
   }
 

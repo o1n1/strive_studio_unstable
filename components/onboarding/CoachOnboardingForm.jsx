@@ -49,14 +49,11 @@ export default function CoachOnboardingForm({ invitacion, token }) {
     ine_frente: null,
     ine_reverso: null,
     comprobante_domicilio: null,
-    titulo_cedula: null,
-    antecedentes_penales: null,
     
     // Paso 7: Info Bancaria
     banco: '',
     clabe: '',
     titular_cuenta: '',
-    estado_cuenta: null,
     
     // Paso 8: Contrato
     aceptar_terminos: false,

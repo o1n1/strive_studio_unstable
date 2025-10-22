@@ -36,33 +36,59 @@ export async function POST(request) {
 
     console.log('✅ [API] Invitación válida:', invitacion.id)
 
-    // 2. Crear usuario en Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: formData.email,
-      password: formData.password,
-      email_confirm: true, // Auto-confirmar email
-      user_metadata: {
-        nombre: formData.nombre,
-        apellidos: formData.apellidos,
-        rol: 'coach'
-      }
-    })
+    // 2. Verificar si el usuario ya existe en Auth
+    const { data: existingUsers } = await supabase.auth.admin.listUsers()
+    const existingUser = existingUsers?.users?.find(u => u.email === formData.email)
 
-    if (authError) {
-      console.error('❌ [API] Error creando usuario:', authError)
-      return NextResponse.json(
-        { error: 'Error al crear usuario: ' + authError.message },
-        { status: 500 }
-      )
+    let userId
+
+    if (existingUser) {
+      console.log('⚠️ [API] Usuario ya existe en Auth, usando ID existente:', existingUser.id)
+      userId = existingUser.id
+
+      // Verificar si ya tiene perfil de coach
+      const { data: existingCoach } = await supabase
+        .from('coaches')
+        .select('id')
+        .eq('id', userId)
+        .single()
+
+      if (existingCoach) {
+        return NextResponse.json(
+          { error: 'Este coach ya está registrado en el sistema' },
+          { status: 400 }
+        )
+      }
+    } else {
+      // 2b. Crear usuario nuevo en Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: formData.email,
+        password: formData.password,
+        email_confirm: true,
+        user_metadata: {
+          nombre: formData.nombre,
+          apellidos: formData.apellidos,
+          rol: 'coach'
+        }
+      })
+
+      if (authError) {
+        console.error('❌ [API] Error creando usuario:', authError)
+        return NextResponse.json(
+          { error: 'Error al crear usuario: ' + authError.message },
+          { status: 500 }
+        )
+      }
+
+      userId = authData.user.id
+      console.log('✅ [API] Usuario creado:', userId)
     }
 
-    const userId = authData.user.id
-    console.log('✅ [API] Usuario creado:', userId)
-
-    // 3. Crear perfil en tabla profiles
+    // 3. Crear o actualizar perfil en tabla profiles
+    // 3. Crear o actualizar perfil en tabla profiles
     const { error: profileError } = await supabase
       .from('profiles')
-      .insert({
+      .upsert({
         id: userId,
         email: formData.email,
         nombre: formData.nombre,
@@ -70,19 +96,19 @@ export async function POST(request) {
         telefono: formData.telefono,
         rol: 'coach',
         activo: true
+      }, {
+        onConflict: 'id'
       })
 
     if (profileError) {
-      console.error('❌ [API] Error creando perfil:', profileError)
-      // Eliminar usuario de auth si falla
-      await supabase.auth.admin.deleteUser(userId)
+      console.error('❌ [API] Error creando/actualizando perfil:', profileError)
       return NextResponse.json(
         { error: 'Error al crear perfil: ' + profileError.message },
         { status: 500 }
       )
     }
 
-    console.log('✅ [API] Perfil creado')
+    console.log('✅ [API] Perfil creado/actualizado')
 
     // 4. Subir archivos a Storage
     const uploadedFiles = {}
@@ -149,27 +175,6 @@ export async function POST(request) {
         formData.comprobante_domicilio,
         'documents',
         formData.comprobante_domicilio.name || 'comprobante.pdf'
-      )
-    }
-    if (formData.titulo_cedula) {
-      uploadedFiles.titulo_cedula = await uploadFile(
-        formData.titulo_cedula,
-        'documents',
-        formData.titulo_cedula.name || 'titulo.pdf'
-      )
-    }
-    if (formData.antecedentes_penales) {
-      uploadedFiles.antecedentes_penales = await uploadFile(
-        formData.antecedentes_penales,
-        'documents',
-        formData.antecedentes_penales.name || 'antecedentes.pdf'
-      )
-    }
-    if (formData.estado_cuenta) {
-      uploadedFiles.estado_cuenta = await uploadFile(
-        formData.estado_cuenta,
-        'documents',
-        formData.estado_cuenta.name || 'estado_cuenta.pdf'
       )
     }
 

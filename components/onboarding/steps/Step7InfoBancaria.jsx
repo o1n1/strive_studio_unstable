@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Building2, CreditCard, User, Upload, FileText, AlertCircle, CheckCircle, X } from 'lucide-react'
+import { Building2, CreditCard, User, AlertCircle, CheckCircle } from 'lucide-react'
 
 const BANCOS_MEXICO = [
   'Banamex',

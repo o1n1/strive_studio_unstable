@@ -10,8 +10,6 @@ export default function Step6Documentos({ data, updateData, nextStep, prevStep }
   const ineFrenteRef = useRef(null)
   const ineReversoRef = useRef(null)
   const comprobanteDomicilioRef = useRef(null)
-  const tituloCedulaRef = useRef(null)
-  const antecedentesPenalesRef = useRef(null)
 
   const validateForm = () => {
     const newErrors = {}
