@@ -2,29 +2,42 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, UserCog, Plus, Eye, CheckCircle, Trash2, AlertCircle } from 'lucide-react'
+import { 
+  Plus, Search, Eye, CheckCircle, XCircle, 
+  Send, Ban, Loader2, Trash2
+} from 'lucide-react'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
-import Button from '@/components/ui/Button'
-import { useProtectedRoute } from '@/hooks/useProtectedRoute'
+import InvitarCoachModal from '@/components/admin/InvitarCoachModal'
 import { supabase } from '@/lib/supabase/client'
+import { useProtectedRoute } from '@/hooks/useProtectedRoute'
 import DashboardSkeleton from '@/components/skeletons/DashboardSkeleton'
 
-export default function CoachesPage() {
+export default function AdminCoachesPage() {
   const router = useRouter()
   const { isAuthorized, loading: authLoading } = useProtectedRoute('admin')
   
   const [coaches, setCoaches] = useState([])
+  const [invitaciones, setInvitaciones] = useState([])
   const [loading, setLoading] = useState(true)
-  const [deleting, setDeleting] = useState(null)
-  const [estadoFilter, setEstadoFilter] = useState('todos')
   const [error, setError] = useState(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [tabActivo, setTabActivo] = useState('todos')
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [deleting, setDeleting] = useState(null)
 
   useEffect(() => {
     if (isAuthorized) {
-      cargarCoaches()
+      loadData()
     }
   }, [isAuthorized])
+
+  const loadData = async () => {
+    await Promise.all([
+      cargarCoaches(),
+      fetchInvitaciones()
+    ])
+  }
 
   const cargarCoaches = async () => {
     try {
@@ -51,10 +64,7 @@ export default function CoachesPage() {
         `)
         .order('created_at', { ascending: false })
 
-      if (error) {
-        console.error('❌ Error en query:', error)
-        throw error
-      }
+      if (error) throw error
 
       const coachesTransformados = (data || []).map(coach => ({
         ...coach,
@@ -72,31 +82,39 @@ export default function CoachesPage() {
       setCoaches(coachesTransformados)
       setLoading(false)
     } catch (error) {
-      console.error('❌ Error en cargarCoaches:', error)
+      console.error('Error cargando coaches:', error)
       setError(error.message)
       setLoading(false)
     }
   }
 
+  const fetchInvitaciones = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('coach_invitations')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setInvitaciones(data || [])
+    } catch (error) {
+      console.error('Error cargando invitaciones:', error)
+    }
+  }
+
   const handleEliminarCoach = async (coachId) => {
-    if (!confirm('¿Estás seguro de eliminar este coach? Esta acción no se puede deshacer.')) {
+    if (!confirm('⚠️ ESTA ACCIÓN ES IRREVERSIBLE\n\n¿Estás seguro de eliminar COMPLETAMENTE este coach?\n\nSe eliminarán:\n- Datos del coach\n- Perfil\n- Usuario de autenticación\n- Documentos\n- Certificaciones\n- Contratos')) {
       return
     }
 
+    setDeleting(coachId)
+
     try {
-      setDeleting(coachId)
-
-      const { data: session } = await supabase.auth.getSession()
-      if (!session?.session) {
-        alert('No estás autenticado')
-        return
-      }
-
       const response = await fetch('/api/coaches/delete', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.session.access_token}`
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
         },
         body: JSON.stringify({ coachId })
       })
@@ -104,20 +122,89 @@ export default function CoachesPage() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || 'Error eliminando coach')
+        throw new Error(result.error || 'Error al eliminar coach')
       }
 
-      console.log('✅ Coach eliminado')
-      await cargarCoaches()
+      alert('✅ Coach eliminado completamente')
+      await loadData()
     } catch (error) {
-      console.error('❌ Error eliminando coach:', error)
-      alert('Error al eliminar coach: ' + error.message)
+      console.error('Error eliminando coach:', error)
+      alert('❌ Error: ' + error.message)
     } finally {
       setDeleting(null)
     }
   }
 
-  if (authLoading) {
+  const handleReenviarInvitacion = async (invitacionId) => {
+    try {
+      const invitacion = invitaciones.find(i => i.id === invitacionId)
+      if (!invitacion) return
+
+      const response = await fetch('/api/coaches/invite/resend', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({ invitacionId })
+      })
+
+      if (!response.ok) throw new Error('Error al reenviar')
+
+      alert('✅ Invitación reenviada')
+      await fetchInvitaciones()
+    } catch (error) {
+      console.error('Error:', error)
+      alert('❌ Error al reenviar: ' + error.message)
+    }
+  }
+
+  const handleCancelarInvitacion = async (invitacionId) => {
+    if (!confirm('¿Cancelar esta invitación?')) return
+
+    try {
+      const { error } = await supabase
+        .from('coach_invitations')
+        .update({ estado: 'cancelado' })
+        .eq('id', invitacionId)
+
+      if (error) throw error
+
+      alert('✅ Invitación cancelada')
+      await fetchInvitaciones()
+    } catch (error) {
+      console.error('Error:', error)
+      alert('❌ Error: ' + error.message)
+    }
+  }
+
+  // Stats
+  const stats = {
+    total: coaches.length,
+    activos: coaches.filter(c => c.estado === 'activo').length,
+    pendientes: coaches.filter(c => c.estado === 'pendiente').length,
+    inactivos: coaches.filter(c => c.estado === 'inactivo').length,
+    invitacionesPendientes: invitaciones.filter(i => i.estado === 'pendiente').length
+  }
+
+  // Filtrar coaches
+  const coachesFiltrados = coaches.filter(coach => {
+    if (tabActivo === 'activos' && coach.estado !== 'activo') return false
+    if (tabActivo === 'pendientes' && coach.estado !== 'pendiente') return false
+    if (tabActivo === 'inactivos' && coach.estado !== 'inactivo') return false
+
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase()
+      const matchNombre = coach.nombre?.toLowerCase().includes(search)
+      const matchApellidos = coach.apellidos?.toLowerCase().includes(search)
+      const matchEmail = coach.email?.toLowerCase().includes(search)
+      if (!matchNombre && !matchApellidos && !matchEmail) return false
+    }
+
+    return true
+  })
+
+  if (authLoading || loading) {
     return <DashboardSkeleton />
   }
 
@@ -125,260 +212,317 @@ export default function CoachesPage() {
     return null
   }
 
-  // Filtrar coaches según estado seleccionado
-  const coachesFiltrados = coaches.filter(coach => {
-    if (estadoFilter === 'todos') return true
-    return coach.estado === estadoFilter
-  })
-
-  // Contar por estado
-  const counts = {
-    todos: coaches.length,
-    pendiente: coaches.filter(c => c.estado === 'pendiente').length,
-    activo: coaches.filter(c => c.estado === 'activo').length,
-    inactivo: coaches.filter(c => c.estado === 'inactivo').length,
+  if (error) {
+    return (
+      <DashboardLayout>
+        <Card>
+          <div className="text-center space-y-4">
+            <XCircle size={48} style={{ color: '#ef4444' }} className="mx-auto" />
+            <h2 className="text-xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              Error al cargar coaches
+            </h2>
+            <p style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+              {error}
+            </p>
+            <button
+              onClick={loadData}
+              className="px-4 py-2 rounded-lg font-semibold"
+              style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              Reintentar
+            </button>
+          </div>
+        </Card>
+      </DashboardLayout>
+    )
   }
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 md:space-y-8">
+      <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              <UserCog className="inline-block mr-3 mb-1" size={32} />
+            <h1 className="text-2xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
               Gestión de Coaches
             </h1>
-            <p className="text-xs sm:text-sm opacity-70 mt-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-              Administra coaches, invitaciones y solicitudes
+            <p className="text-sm opacity-70 mt-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+              Administra coaches, invitaciones y aprobaciones
             </p>
           </div>
-
-          <Button
-            onClick={() => router.push('/admin/coaches/invitar')}
-            icon={<Plus size={20} />}
-            style={{ background: '#AE3F21', color: '#FFFCF3' }}>
-            Invitar Coach
-          </Button>
+          
+          <button
+            onClick={() => setShowInviteModal(true)}
+            className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+            style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+            <Plus size={18} />
+            Invitar Nuevo Coach
+          </button>
         </div>
 
-        {/* Tabs de estado */}
-        <Card>
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {[
-              { key: 'todos', label: 'Todos' },
-              { key: 'pendiente', label: 'Pendientes' },
-              { key: 'activo', label: 'Activos' },
-              { key: 'inactivo', label: 'Inactivos' }
-            ].map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setEstadoFilter(key)}
-                className="px-4 py-2 rounded-lg font-semibold transition-all whitespace-nowrap"
-                style={{
-                  background: estadoFilter === key ? '#AE3F21' : 'transparent',
-                  color: estadoFilter === key ? '#FFFCF3' : '#B39A72',
-                  fontFamily: 'Montserrat, sans-serif'
-                }}>
-                {label} ({counts[key]})
-              </button>
-            ))}
-          </div>
-        </Card>
-
-        {/* Error message */}
-        {error && (
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card>
-            <div className="flex items-center gap-3 text-red-500">
-              <AlertCircle size={24} />
-              <div>
-                <p className="font-semibold">Error al cargar coaches</p>
-                <p className="text-sm opacity-80">{error}</p>
-                <button
-                  onClick={cargarCoaches}
-                  className="mt-2 px-4 py-2 rounded-lg font-semibold hover:opacity-80"
-                  style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Reintentar
-                </button>
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {/* Lista de coaches */}
-        {loading ? (
-          <Card>
-            <div className="flex items-center justify-center py-12">
-              <Loader2 size={32} className="animate-spin" style={{ color: '#AE3F21' }} />
-            </div>
-          </Card>
-        ) : coachesFiltrados.length === 0 ? (
-          <Card>
-            <div className="text-center py-12">
-              <UserCog size={48} className="mx-auto mb-4 opacity-30" style={{ color: '#B39A72' }} />
-              <p style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                {estadoFilter === 'todos' 
-                  ? 'No hay coaches registrados aún' 
-                  : `No hay coaches en estado: ${estadoFilter}`}
+            <div className="text-center">
+              <p className="text-3xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                {stats.total}
+              </p>
+              <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Total
               </p>
             </div>
           </Card>
-        ) : (
-          <div className="grid gap-4">
-            {coachesFiltrados.map(coach => {
-              // DATOS CORREGIDOS con validación segura
-              const profile = coach.profile || {}
-              const nombreCompleto = profile.nombre && profile.apellidos
-                ? `${profile.nombre} ${profile.apellidos}` 
-                : profile.nombre || 'Coach'
+          
+          <Card>
+            <div className="text-center">
+              <p className="text-3xl font-bold" style={{ color: '#10b981', fontFamily: 'Montserrat, sans-serif' }}>
+                {stats.activos}
+              </p>
+              <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Activos
+              </p>
+            </div>
+          </Card>
 
-              const email = profile.email || 'Sin email'
-              
-              // Prioridad: foto_profesional_url > avatar_url
-              const fotoUrl = coach.foto_profesional_url || profile.avatar_url
+          <Card>
+            <div className="text-center">
+              <p className="text-3xl font-bold" style={{ color: '#fbbf24', fontFamily: 'Montserrat, sans-serif' }}>
+                {stats.pendientes}
+              </p>
+              <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Pendientes
+              </p>
+            </div>
+          </Card>
 
-              // Iniciales para fallback
-              const iniciales = nombreCompleto
-                .split(' ')
-                .map(n => n[0])
-                .join('')
-                .toUpperCase()
-                .slice(0, 2)
+          <Card>
+            <div className="text-center">
+              <p className="text-3xl font-bold" style={{ color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
+                {stats.inactivos}
+              </p>
+              <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Inactivos
+              </p>
+            </div>
+          </Card>
 
-              return (
-                <Card key={coach.id}>
-                  <div className="flex gap-4">
-                    {/* Foto de perfil */}
-                    <div className="flex-shrink-0">
-                      <div 
-                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden flex items-center justify-center"
-                        style={{ 
-                          background: fotoUrl 
-                            ? 'transparent' 
-                            : 'linear-gradient(135deg, rgba(174, 63, 33, 0.2), rgba(179, 154, 114, 0.2))',
-                          border: '2px solid rgba(179, 154, 114, 0.3)'
-                        }}>
-                        {fotoUrl ? (
-                          <img
-                            src={fotoUrl}
-                            alt={nombreCompleto}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              console.error('❌ Error cargando imagen:', fotoUrl)
-                              // Reemplazar con iniciales
-                              const parent = e.target.parentElement
-                              parent.style.background = 'linear-gradient(135deg, rgba(174, 63, 33, 0.2), rgba(179, 154, 114, 0.2))'
-                              e.target.style.display = 'none'
-                              const span = document.createElement('span')
-                              span.style.cssText = 'color: #B39A72; font-size: 20px; font-weight: bold; font-family: Montserrat, sans-serif'
-                              span.textContent = iniciales
-                              parent.appendChild(span)
-                            }}
-                          />
-                        ) : (
-                          <span style={{ color: '#B39A72', fontSize: '20px', fontWeight: 'bold', fontFamily: 'Montserrat, sans-serif' }}>
-                            {iniciales}
-                          </span>
-                        )}
+          <Card>
+            <div className="text-center">
+              <p className="text-3xl font-bold" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
+                {stats.invitacionesPendientes}
+              </p>
+              <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Invitaciones
+              </p>
+            </div>
+          </Card>
+        </div>
+
+        {/* Tabs y Búsqueda */}
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex gap-2 overflow-x-auto">
+            {[
+              { id: 'todos', label: 'Todos', count: stats.total },
+              { id: 'activos', label: 'Activos', count: stats.activos },
+              { id: 'pendientes', label: 'Pendientes', count: stats.pendientes },
+              { id: 'inactivos', label: 'Inactivos', count: stats.inactivos }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setTabActivo(tab.id)}
+                className="px-4 py-2 rounded-lg font-semibold whitespace-nowrap transition-all"
+                style={{
+                  background: tabActivo === tab.id ? '#AE3F21' : 'rgba(156, 122, 94, 0.2)',
+                  color: tabActivo === tab.id ? '#FFFCF3' : '#B39A72',
+                  fontFamily: 'Montserrat, sans-serif'
+                }}>
+                {tab.label} ({tab.count})
+              </button>
+            ))}
+          </div>
+
+          <div className="relative flex-1">
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#B39A72' }} />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por nombre o email..."
+              className="w-full pl-10 pr-4 py-2 rounded-lg text-sm"
+              style={{
+                background: 'rgba(42, 42, 42, 0.8)',
+                border: '1px solid rgba(156, 122, 94, 0.3)',
+                color: '#FFFCF3',
+                fontFamily: 'Montserrat, sans-serif'
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Lista de Coaches */}
+        <div className="space-y-4">
+          {coachesFiltrados.length === 0 ? (
+            <Card>
+              <div className="text-center py-8">
+                <p style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  No se encontraron coaches
+                </p>
+              </div>
+            </Card>
+          ) : (
+            coachesFiltrados.map(coach => (
+              <Card key={coach.id}>
+                <div className="flex items-start gap-4">
+                  {/* Avatar */}
+                  <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold flex-shrink-0"
+                    style={{ 
+                      background: coach.avatar_url ? 'transparent' : 'rgba(174, 63, 33, 0.2)',
+                      color: '#AE3F21',
+                      backgroundImage: coach.avatar_url ? `url(${coach.avatar_url})` : 'none',
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center'
+                    }}>
+                    {!coach.avatar_url && (coach.nombre?.[0] || 'C')}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                          {coach.nombre} {coach.apellidos}
+                        </h3>
+                        <p className="text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                          {coach.email}
+                        </p>
                       </div>
+                      
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
+                        style={{ 
+                          background: coach.estado === 'activo' 
+                            ? 'rgba(16, 185, 129, 0.2)' 
+                            : coach.estado === 'pendiente'
+                            ? 'rgba(251, 191, 36, 0.2)'
+                            : 'rgba(239, 68, 68, 0.2)',
+                          color: coach.estado === 'activo' 
+                            ? '#10b981' 
+                            : coach.estado === 'pendiente'
+                            ? '#fbbf24'
+                            : '#ef4444',
+                          fontFamily: 'Montserrat, sans-serif'
+                        }}>
+                        {coach.estado === 'activo' ? '🟢 Activo' : 
+                         coach.estado === 'pendiente' ? '🟡 Pendiente' : 
+                         '🔴 Inactivo'}
+                      </span>
                     </div>
 
-                    {/* Información del coach */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="min-w-0 flex-1">
-                          <h3 className="text-lg font-bold truncate" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                            {nombreCompleto}
-                          </h3>
-                          <p className="text-sm truncate" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                            {email}
-                          </p>
-                        </div>
-                        
-                        {/* Badge de estado */}
-                        <span 
-                          className="px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap flex-shrink-0"
-                          style={{
-                            background: coach.estado === 'pendiente' 
-                              ? 'rgba(251, 191, 36, 0.2)'
-                              : coach.estado === 'activo'
-                              ? 'rgba(16, 185, 129, 0.2)'
-                              : 'rgba(156, 163, 175, 0.2)',
-                            color: coach.estado === 'pendiente'
-                              ? '#fbbf24'
-                              : coach.estado === 'activo'
-                              ? '#10b981'
-                              : '#9ca3af',
-                            fontFamily: 'Montserrat, sans-serif'
-                          }}>
-                          {coach.estado === 'pendiente' && '⏳ '}
-                          {coach.estado === 'activo' && '✅ '}
-                          {coach.estado === 'inactivo' && '⛔ '}
-                          {coach.estado?.toUpperCase() || 'DESCONOCIDO'}
+                    <div className="flex flex-wrap gap-3 text-xs mb-3">
+                      {coach.telefono && (
+                        <span style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                          📱 {coach.telefono}
                         </span>
-                      </div>
+                      )}
+                      {coach.años_experiencia && (
+                        <span style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                          🎯 {coach.años_experiencia} años
+                        </span>
+                      )}
+                      {coach.especialidades && coach.especialidades.length > 0 && (
+                        <span style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                          💪 {coach.especialidades.length} especialidades
+                        </span>
+                      )}
+                    </div>
 
-                      {/* Información adicional */}
-                      <div className="flex flex-wrap gap-3 text-xs mb-3">
-                        {coach.telefono && (
-                          <span style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                            📞 {coach.telefono}
-                          </span>
-                        )}
-                        {coach.años_experiencia !== null && coach.años_experiencia !== undefined && (
-                          <span style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                            ⭐ {coach.años_experiencia} años exp.
-                          </span>
-                        )}
-                        {coach.especialidades && Array.isArray(coach.especialidades) && coach.especialidades.length > 0 && (
-                          <span style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                            💪 {coach.especialidades.length} especialidades
-                          </span>
-                        )}
-                      </div>
+                    {/* Botones */}
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        onClick={() => router.push(`/admin/coaches/${coach.id}`)}
+                        className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+                        style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                        <Eye size={16} />
+                        Ver Detalle
+                      </button>
 
-                      {/* Botones de acción */}
-                      <div className="flex gap-2 flex-wrap">
-                        <button
-                          onClick={() => router.push(`/admin/coaches/${coach.id}`)}
-                          className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
-                          style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                          <Eye size={16} />
-                          Ver Detalle
-                        </button>
-
-                        {coach.estado === 'pendiente' && (
-                          <button
-                            onClick={() => router.push(`/admin/coaches/${coach.id}`)}
-                            className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
-                            style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontFamily: 'Montserrat, sans-serif' }}>
-                            <CheckCircle size={16} />
-                            Revisar y Aprobar
-                          </button>
-                        )}
-
-                        {/* Botón Eliminar */}
-                        <button
-                          onClick={() => handleEliminarCoach(coach.id)}
-                          disabled={deleting === coach.id}
-                          className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2 ml-auto"
-                          style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
-                          {deleting === coach.id ? (
+                      <button
+                        onClick={() => handleEliminarCoach(coach.id)}
+                        disabled={deleting === coach.id}
+                        className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2 ml-auto"
+                        style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
+                        {deleting === coach.id ? (
+                          <>
                             <Loader2 size={16} className="animate-spin" />
-                          ) : (
+                            Eliminando...
+                          </>
+                        ) : (
+                          <>
                             <Trash2 size={16} />
-                          )}
-                          {deleting === coach.id ? 'Eliminando...' : 'Eliminar'}
-                        </button>
-                      </div>
+                            Eliminar
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
-                </Card>
-              )
-            })}
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
+
+        {/* Invitaciones Pendientes */}
+        {invitaciones.filter(i => i.estado === 'pendiente').length > 0 && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              Invitaciones Pendientes ({invitaciones.filter(i => i.estado === 'pendiente').length})
+            </h3>
+            
+            <div className="space-y-3">
+              {invitaciones
+                .filter(i => i.estado === 'pendiente')
+                .map(inv => (
+                  <Card key={inv.id}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                          {inv.email}
+                        </p>
+                        <p className="text-xs opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                          {inv.categoria} • Expira: {new Date(inv.expira_en).toLocaleDateString('es-MX')}
+                        </p>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleReenviarInvitacion(inv.id)}
+                          className="px-3 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-80"
+                          style={{ background: 'rgba(156, 122, 94, 0.3)', color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                          <Send size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleCancelarInvitacion(inv.id)}
+                          className="px-3 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-80"
+                          style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
+                          <Ban size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+            </div>
           </div>
         )}
       </div>
+
+      {/* Modal de Invitación */}
+      {showInviteModal && (
+        <InvitarCoachModal
+          onClose={() => setShowInviteModal(false)}
+          onSuccess={() => {
+            setShowInviteModal(false)
+            loadData()
+          }}
+        />
+      )}
     </DashboardLayout>
   )
 }
