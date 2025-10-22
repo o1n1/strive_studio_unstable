@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { Building2, CreditCard, User, AlertCircle, CheckCircle } from 'lucide-react'
 
 const BANCOS_MEXICO = [
@@ -24,13 +24,12 @@ const BANCOS_MEXICO = [
 export default function Step7InfoBancaria({ data, updateData, nextStep, prevStep }) {
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
-  const estadoCuentaRef = useRef(null)
 
   const validateForm = () => {
     const newErrors = {}
 
     // Solo validar si se llenó algún campo
-    const hasAnyBankData = data.banco || data.clabe || data.titular_cuenta || data.estado_cuenta
+    const hasAnyBankData = data.banco || data.clabe || data.titular_cuenta
 
     if (hasAnyBankData) {
       if (!data.banco) {
@@ -75,42 +74,9 @@ export default function Step7InfoBancaria({ data, updateData, nextStep, prevStep
     updateData({ 
       banco: '', 
       clabe: '', 
-      titular_cuenta: '',
-      estado_cuenta: null
+      titular_cuenta: ''
     })
     nextStep()
-  }
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-
-    // Validar tipo
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']
-    if (!allowedTypes.includes(file.type)) {
-      setErrors({ ...errors, estado_cuenta: 'Solo PDF, JPG o PNG' })
-      return
-    }
-
-    // Validar tamaño (10MB max)
-    if (file.size > 10 * 1024 * 1024) {
-      setErrors({ ...errors, estado_cuenta: 'Máximo 10MB' })
-      return
-    }
-
-    updateData({ estado_cuenta: file })
-
-    // Limpiar error
-    const newErrors = { ...errors }
-    delete newErrors.estado_cuenta
-    setErrors(newErrors)
-  }
-
-  const removeFile = () => {
-    updateData({ estado_cuenta: null })
-    if (estadoCuentaRef.current) {
-      estadoCuentaRef.current.value = ''
-    }
   }
 
   const formatCLABE = (value) => {
@@ -118,7 +84,7 @@ export default function Step7InfoBancaria({ data, updateData, nextStep, prevStep
     return numbers.slice(0, 18)
   }
 
-  const hasAnyValue = data.banco || data.clabe || data.titular_cuenta || data.estado_cuenta
+  const hasAnyValue = data.banco || data.clabe || data.titular_cuenta
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -267,73 +233,6 @@ export default function Step7InfoBancaria({ data, updateData, nextStep, prevStep
         <p className="text-xs mt-1" style={{ color: '#666', fontFamily: 'Montserrat, sans-serif' }}>
           Debe coincidir con el nombre registrado en el banco
         </p>
-      </div>
-
-      {/* Estado de Cuenta */}
-      <div>
-        <label className="block text-sm font-medium mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-          Estado de Cuenta <span className="text-xs font-normal" style={{ color: '#666' }}>(Opcional)</span>
-        </label>
-        
-        <p className="text-xs mb-2" style={{ color: '#666', fontFamily: 'Montserrat, sans-serif' }}>
-          Para verificar tu CLABE interbancaria
-        </p>
-
-        <input
-          ref={estadoCuentaRef}
-          type="file"
-          accept=".pdf,.jpg,.jpeg,.png"
-          onChange={handleFileChange}
-          className="hidden"
-          id="file-estado-cuenta"
-        />
-
-        {data.estado_cuenta ? (
-          <div
-            className="p-4 rounded-xl flex items-center justify-between"
-            style={{ background: 'rgba(16, 185, 129, 0.1)', border: '2px solid #10b981' }}>
-            <div className="flex items-center gap-3 flex-1">
-              <FileText size={24} style={{ color: '#10b981' }} />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm truncate" style={{ color: '#10b981', fontFamily: 'Montserrat, sans-serif' }}>
-                  {data.estado_cuenta.name}
-                </p>
-                <p className="text-xs" style={{ color: '#666', fontFamily: 'Montserrat, sans-serif' }}>
-                  {(data.estado_cuenta.size / 1024 / 1024).toFixed(2)} MB
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={removeFile}
-              className="p-2 rounded-lg transition-all hover:bg-red-500/20"
-              style={{ color: '#ef4444' }}>
-              <X size={20} />
-            </button>
-          </div>
-        ) : (
-          <label
-            htmlFor="file-estado-cuenta"
-            className="flex flex-col items-center justify-center p-6 rounded-xl cursor-pointer transition-all hover:opacity-80"
-            style={{
-              background: 'rgba(156, 122, 94, 0.1)',
-              border: errors.estado_cuenta ? '2px dashed #ef4444' : '2px dashed rgba(156, 122, 94, 0.5)'
-            }}>
-            <Upload size={32} style={{ color: errors.estado_cuenta ? '#ef4444' : '#B39A72' }} className="mb-2" />
-            <p className="font-medium text-sm mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              Click para subir estado de cuenta
-            </p>
-            <p className="text-xs" style={{ color: '#666', fontFamily: 'Montserrat, sans-serif' }}>
-              PDF, JPG o PNG (Máx. 10MB)
-            </p>
-          </label>
-        )}
-
-        {errors.estado_cuenta && (
-          <p className="text-xs mt-2 flex items-center gap-1" style={{ color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
-            <AlertCircle size={14} /> {errors.estado_cuenta}
-          </p>
-        )}
       </div>
 
       {/* Confirmación */}
