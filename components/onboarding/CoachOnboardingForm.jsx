@@ -100,7 +100,33 @@ export default function CoachOnboardingForm({ invitacion, token }) {
             prevStep={prevStep}
           />
         )
-      // Casos 3-9 se agregarán en siguientes sesiones
+      case 3:
+        return (
+          <Step3InfoProfesional
+            data={formData}
+            updateData={updateFormData}
+            nextStep={nextStep}
+            prevStep={prevStep}
+          />
+        )
+      case 4:
+        return (
+          <Step4Certificaciones
+            data={formData}
+            updateData={updateFormData}
+            nextStep={nextStep}
+            prevStep={prevStep}
+          />
+        )
+      case 5:
+        return (
+          <Step5RedesSociales
+            data={formData}
+            updateData={updateFormData}
+            nextStep={nextStep}
+            prevStep={prevStep}
+          />
+        )
       default:
         return (
           <div className="text-center p-8">
