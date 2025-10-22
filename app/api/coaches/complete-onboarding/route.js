@@ -85,7 +85,6 @@ export async function POST(request) {
     }
 
     // 3. Crear o actualizar perfil en tabla profiles
-    // 3. Crear o actualizar perfil en tabla profiles
     const { error: profileError } = await supabase
       .from('profiles')
       .upsert({
@@ -110,75 +109,131 @@ export async function POST(request) {
 
     console.log('✅ [API] Perfil creado/actualizado')
 
-    // 4. Subir archivos a Storage
+    // 4. Subir archivos a Storage (CORREGIDO)
     const uploadedFiles = {}
     
-    // Función helper para subir archivos
-    const uploadFile = async (file, folder, fileName) => {
+    // Función helper mejorada para subir archivos
+    const uploadFile = async (file, bucketName, folder, fileName) => {
       if (!file || typeof file === 'string') return null
       
       try {
-        // Convertir base64 a File si es necesario
+        // Convertir base64 a blob si es necesario
         let fileToUpload = file
-        if (file.startsWith && file.startsWith('data:')) {
-          const response = await fetch(file)
-          const blob = await response.blob()
-          fileToUpload = blob
+        let fileExt = 'jpg' // default
+
+        if (typeof file === 'string') {
+          // Si es base64
+          if (file.startsWith('data:')) {
+            const response = await fetch(file)
+            const blob = await response.blob()
+            fileToUpload = blob
+            
+            // Extraer extensión del tipo MIME
+            const mimeType = file.split(';')[0].split(':')[1]
+            fileExt = mimeType.split('/')[1]
+          }
+        } else if (file.name) {
+          // Si es objeto File
+          fileExt = file.name.split('.').pop()
         }
 
-        const fileExt = fileName.split('.').pop()
-        const filePath = `${folder}/${userId}/${Date.now()}.${fileExt}`
+        const timestamp = Date.now()
+        const filePath = `${userId}/${folder}/${timestamp}.${fileExt}`
+
+        console.log(`📤 Subiendo archivo a ${bucketName}/${filePath}`)
 
         const { data, error } = await supabase.storage
-          .from('coach-documents')
-          .upload(filePath, fileToUpload)
+          .from(bucketName)
+          .upload(filePath, fileToUpload, {
+            contentType: file.type || `image/${fileExt}`,
+            upsert: false
+          })
 
-        if (error) throw error
+        if (error) {
+          console.error(`❌ Error subiendo a ${bucketName}/${filePath}:`, error)
+          throw error
+        }
 
+        // Obtener URL pública
         const { data: urlData } = supabase.storage
-          .from('coach-documents')
+          .from(bucketName)
           .getPublicUrl(filePath)
 
+        console.log(`✅ Archivo subido: ${urlData.publicUrl}`)
         return urlData.publicUrl
+
       } catch (error) {
-        console.error('Error uploading file:', error)
+        console.error(`❌ Error en uploadFile (${bucketName}/${folder}):`, error)
         return null
       }
     }
 
-    // Subir foto de perfil
+    // Subir foto de perfil (bucket PÚBLICO)
     if (formData.foto_perfil) {
       uploadedFiles.foto_perfil = await uploadFile(
         formData.foto_perfil,
+        'coach-profile-photos', // BUCKET PÚBLICO
         'profile',
-        formData.foto_perfil.name || 'profile.jpg'
+        'profile.jpg'
       )
     }
 
-    // Subir documentos
+    // Subir documentos sensibles (bucket PRIVADO)
     if (formData.ine_frente) {
       uploadedFiles.ine_frente = await uploadFile(
         formData.ine_frente,
-        'documents',
-        formData.ine_frente.name || 'ine_frente.jpg'
-      )
-    }
-    if (formData.ine_reverso) {
-      uploadedFiles.ine_reverso = await uploadFile(
-        formData.ine_reverso,
-        'documents',
-        formData.ine_reverso.name || 'ine_reverso.jpg'
-      )
-    }
-    if (formData.comprobante_domicilio) {
-      uploadedFiles.comprobante_domicilio = await uploadFile(
-        formData.comprobante_domicilio,
-        'documents',
-        formData.comprobante_domicilio.name || 'comprobante.pdf'
+        'coach-documents', // BUCKET PRIVADO
+        'ine',
+        'ine_frente.jpg'
       )
     }
 
-    console.log('✅ [API] Archivos subidos')
+    if (formData.ine_reverso) {
+      uploadedFiles.ine_reverso = await uploadFile(
+        formData.ine_reverso,
+        'coach-documents',
+        'ine',
+        'ine_reverso.jpg'
+      )
+    }
+
+    if (formData.comprobante_domicilio) {
+      uploadedFiles.comprobante_domicilio = await uploadFile(
+        formData.comprobante_domicilio,
+        'coach-documents',
+        'documentos',
+        'comprobante.pdf'
+      )
+    }
+
+    if (formData.titulo_cedula) {
+      uploadedFiles.titulo_cedula = await uploadFile(
+        formData.titulo_cedula,
+        'coach-documents',
+        'certificaciones',
+        'titulo.pdf'
+      )
+    }
+
+    if (formData.antecedentes_penales) {
+      uploadedFiles.antecedentes_penales = await uploadFile(
+        formData.antecedentes_penales,
+        'coach-documents',
+        'documentos',
+        'antecedentes.pdf'
+      )
+    }
+
+    if (formData.estado_cuenta) {
+      uploadedFiles.estado_cuenta = await uploadFile(
+        formData.estado_cuenta,
+        'coach-documents',
+        'bancarios',
+        'estado_cuenta.pdf'
+      )
+    }
+
+    console.log('✅ [API] Archivos subidos:', Object.keys(uploadedFiles))
 
     // 5. Crear registro en tabla coaches
     const { error: coachError } = await supabase
@@ -197,14 +252,16 @@ export async function POST(request) {
         rfc: formData.rfc || null,
         contacto_emergencia: {
           nombre: formData.contacto_emergencia_nombre || '',
-          telefono: formData.contacto_emergencia_telefono || ''
+          telefono: formData.contacto_emergencia_telefono || '',
+          relacion: formData.contacto_emergencia_relacion || ''
         },
         banco: formData.banco || null,
         clabe_encriptada: formData.clabe || null, // TODO: Encriptar en producción
         titular_cuenta: formData.titular_cuenta || null,
         foto_profesional_url: uploadedFiles.foto_perfil || null,
         estado: 'pendiente',
-        activo: false
+        activo: false,
+        fecha_ingreso: new Date().toISOString().split('T')[0]
       })
 
     if (coachError) {
@@ -220,60 +277,26 @@ export async function POST(request) {
     // 6. Guardar documentos en tabla coach_documents
     const documentos = []
     
-    if (uploadedFiles.ine_frente) {
-      documentos.push({
-        coach_id: userId,
-        tipo: 'ine_frente',
-        nombre_archivo: 'INE Frente',
-        archivo_url: uploadedFiles.ine_frente,
-        verificado: false
-      })
-    }
-    if (uploadedFiles.ine_reverso) {
-      documentos.push({
-        coach_id: userId,
-        tipo: 'ine_reverso',
-        nombre_archivo: 'INE Reverso',
-        archivo_url: uploadedFiles.ine_reverso,
-        verificado: false
-      })
-    }
-    if (uploadedFiles.comprobante_domicilio) {
-      documentos.push({
-        coach_id: userId,
-        tipo: 'comprobante_domicilio',
-        nombre_archivo: 'Comprobante de Domicilio',
-        archivo_url: uploadedFiles.comprobante_domicilio,
-        verificado: false
-      })
-    }
-    if (uploadedFiles.titulo_cedula) {
-      documentos.push({
-        coach_id: userId,
-        tipo: 'titulo_cedula',
-        nombre_archivo: 'Título/Cédula',
-        archivo_url: uploadedFiles.titulo_cedula,
-        verificado: false
-      })
-    }
-    if (uploadedFiles.antecedentes_penales) {
-      documentos.push({
-        coach_id: userId,
-        tipo: 'antecedentes_penales',
-        nombre_archivo: 'Antecedentes No Penales',
-        archivo_url: uploadedFiles.antecedentes_penales,
-        verificado: false
-      })
-    }
-    if (uploadedFiles.estado_cuenta) {
-      documentos.push({
-        coach_id: userId,
-        tipo: 'estado_cuenta',
-        nombre_archivo: 'Estado de Cuenta',
-        archivo_url: uploadedFiles.estado_cuenta,
-        verificado: false
-      })
-    }
+    const documentosMap = [
+      { key: 'ine_frente', tipo: 'ine_frente', nombre: 'INE Frente' },
+      { key: 'ine_reverso', tipo: 'ine_reverso', nombre: 'INE Reverso' },
+      { key: 'comprobante_domicilio', tipo: 'comprobante_domicilio', nombre: 'Comprobante de Domicilio' },
+      { key: 'titulo_cedula', tipo: 'titulo_cedula', nombre: 'Título/Cédula' },
+      { key: 'antecedentes_penales', tipo: 'antecedentes_penales', nombre: 'Antecedentes No Penales' },
+      { key: 'estado_cuenta', tipo: 'estado_cuenta', nombre: 'Estado de Cuenta' }
+    ]
+
+    documentosMap.forEach(({ key, tipo, nombre }) => {
+      if (uploadedFiles[key]) {
+        documentos.push({
+          coach_id: userId,
+          tipo,
+          nombre_archivo: nombre,
+          archivo_url: uploadedFiles[key],
+          verificado: false
+        })
+      }
+    })
 
     if (documentos.length > 0) {
       const { error: docsError } = await supabase
@@ -283,93 +306,64 @@ export async function POST(request) {
       if (docsError) {
         console.error('⚠️ [API] Error guardando documentos:', docsError)
       } else {
-        console.log('✅ [API] Documentos guardados')
+        console.log(`✅ [API] ${documentos.length} documentos guardados`)
       }
     }
 
-    // 7. Guardar certificaciones en tabla coach_certifications
+    // 7. Guardar certificaciones si existen
     if (formData.certificaciones && formData.certificaciones.length > 0) {
-      const certificaciones = []
+      const certificaciones = formData.certificaciones.map(cert => ({
+        coach_id: userId,
+        nombre: cert.nombre,
+        institucion: cert.institucion,
+        fecha_obtencion: cert.fecha_obtencion,
+        fecha_vigencia: cert.fecha_vigencia || null,
+        archivo_url: cert.archivo_url || null,
+        verificado: false
+      }))
 
-      for (const cert of formData.certificaciones) {
-        let archivoUrl = null
-        
-        if (cert.archivo) {
-          archivoUrl = await uploadFile(
-            cert.archivo,
-            'certifications',
-            cert.archivo.name || 'certificacion.pdf'
-          )
-        }
-
-        certificaciones.push({
-          coach_id: userId,
-          nombre: cert.nombre,
-          institucion: cert.institucion,
-          fecha_obtencion: cert.fecha_obtencion,
-          fecha_vigencia: cert.fecha_vigencia || null,
-          archivo_url: archivoUrl,
-          verificado: false
-        })
-      }
-
-      const { error: certsError } = await supabase
+      const { error: certError } = await supabase
         .from('coach_certifications')
         .insert(certificaciones)
 
-      if (certsError) {
-        console.error('⚠️ [API] Error guardando certificaciones:', certsError)
+      if (certError) {
+        console.error('⚠️ [API] Error guardando certificaciones:', certError)
       } else {
-        console.log('✅ [API] Certificaciones guardadas')
+        console.log(`✅ [API] ${certificaciones.length} certificaciones guardadas`)
       }
     }
 
-    // 8. Guardar contrato en tabla coach_contracts
-    const { error: contractError } = await supabase
-      .from('coach_contracts')
-      .insert({
-        coach_id: userId,
-        tipo_contrato: 'por_clase', // Default
-        fecha_inicio: new Date().toISOString().split('T')[0],
-        estado: 'activo',
-        firma_digital: formData.firma_digital,
-        firmado: true,
-        fecha_firma: new Date().toISOString(),
-        vigente: true
-      })
-
-    if (contractError) {
-      console.error('⚠️ [API] Error guardando contrato:', contractError)
-    } else {
-      console.log('✅ [API] Contrato guardado')
-    }
-
-    // 9. Marcar invitación como usada
-    await supabase
+    // 8. Marcar invitación como usada
+    const { error: updateInvError } = await supabase
       .from('coach_invitations')
       .update({
         estado: 'usado',
         usado_en: new Date().toISOString()
       })
-      .eq('id', invitacionId)
+      .eq('id', invitacion.id)
 
-    console.log('✅ [API] Invitación marcada como usada')
+    if (updateInvError) {
+      console.error('⚠️ [API] Error actualizando invitación:', updateInvError)
+    } else {
+      console.log('✅ [API] Invitación marcada como usada')
+    }
 
-    // 10. TODO: Enviar email de notificación al admin
-    // await sendAdminNotificationEmail(...)
+    // 9. TODO: Enviar email de confirmación al coach
+    // 10. TODO: Enviar notificación a admins de nueva solicitud pendiente
 
     console.log('✅ [API] Onboarding completado exitosamente')
 
     return NextResponse.json({
       success: true,
-      message: 'Registro completado. Tu solicitud será revisada por el equipo.',
-      userId
+      message: 'Registro completado. Tu solicitud está en revisión.',
+      userId,
+      coachId: userId
     })
 
   } catch (error) {
-    console.error('❌ [API] Error en complete-onboarding:', error)
+    console.error('❌ [API] Error general en complete-onboarding:', error)
     return NextResponse.json(
-      { error: 'Error interno del servidor: ' + error.message },
+      { error: 'Error procesando solicitud: ' + error.message },
       { status: 500 }
     )
   }
