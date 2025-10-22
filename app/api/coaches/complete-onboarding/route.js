@@ -6,13 +6,14 @@ export async function POST(request) {
     console.log('🚀 [API] Iniciando complete-onboarding...')
 
     const body = await request.json()
-    console.log('📦 [API] Body recibido')
-    
     const { token, formData, invitacionId } = body
+
+    console.log('🔍 [API] Token:', token)
+    console.log('🔍 [API] Email:', formData?.email)
 
     if (!formData || !formData.email) {
       return NextResponse.json(
-        { error: 'FormData o email faltante' },
+        { error: 'Datos incompletos' },
         { status: 400 }
       )
     }
@@ -72,99 +73,95 @@ export async function POST(request) {
     const userId = authData.user.id
     console.log('✅ [API] Usuario creado:', userId)
 
-    // 3. SUBIR ARCHIVOS - SEPARADOS POR TIPO
+    // 3. SUBIR ARCHIVOS A LOS BUCKETS CORRECTOS
     console.log('📤 [API] Subiendo archivos...')
     const uploadedFiles = {}
     
-    // Función para subir a AVATARS (público)
-    const uploadAvatar = async (file) => {
-      if (!file || typeof file === 'string') return null
+    // Función helper para subir archivos
+    const uploadFile = async (file, bucketName, folder, fileName) => {
+      if (!file) return null
       
       try {
+        // Convertir data URL a Blob si es necesario
         let fileToUpload = file
-        if (file.startsWith && file.startsWith('data:')) {
-          const response = await fetch(file)
-          const blob = await response.blob()
-          fileToUpload = blob
-        }
-
-        const fileExt = 'jpg'
-        const fileName = `${userId}-${Date.now()}.${fileExt}`
-        const filePath = `${userId}/${fileName}`
-
-        console.log('📸 [API] Subiendo avatar a bucket "avatars":', filePath)
-
-        const { data, error } = await supabase.storage
-          .from('avatars')
-          .upload(filePath, fileToUpload, { upsert: true })
-
-        if (error) throw error
-
-        const { data: urlData } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(filePath)
-
-        console.log('✅ [API] Avatar subido:', urlData.publicUrl)
-        return urlData.publicUrl
-      } catch (error) {
-        console.error('❌ [API] Error subiendo avatar:', error)
-        return null
-      }
-    }
-
-    // Función para subir DOCUMENTOS (privado)
-    const uploadDocument = async (file, folder, fileName) => {
-      if (!file || typeof file === 'string') return null
-      
-      try {
-        let fileToUpload = file
-        if (file.startsWith && file.startsWith('data:')) {
+        if (typeof file === 'string' && file.startsWith('data:')) {
           const response = await fetch(file)
           const blob = await response.blob()
           fileToUpload = blob
         }
 
         const fileExt = fileName.split('.').pop()
-        const filePath = `${folder}/${userId}/${Date.now()}.${fileExt}`
+        const filePath = `${userId}/${folder ? folder + '/' : ''}${Date.now()}.${fileExt}`
 
-        console.log('📄 [API] Subiendo documento a bucket "coach-documents":', filePath)
+        console.log(`📤 Subiendo a bucket: ${bucketName}, ruta: ${filePath}`)
 
         const { data, error } = await supabase.storage
-          .from('coach-documents')
+          .from(bucketName)
           .upload(filePath, fileToUpload)
 
-        if (error) throw error
+        if (error) {
+          console.error(`❌ Error subiendo a ${bucketName}:`, error)
+          throw error
+        }
 
         const { data: urlData } = supabase.storage
-          .from('coach-documents')
+          .from(bucketName)
           .getPublicUrl(filePath)
 
+        console.log(`✅ Archivo subido: ${urlData.publicUrl}`)
         return urlData.publicUrl
+
       } catch (error) {
-        console.error('❌ [API] Error subiendo documento:', error)
+        console.error('❌ Error uploading file:', error)
         return null
       }
     }
 
-    // Subir foto de perfil a AVATARS
+    // SUBIR FOTO DE PERFIL al bucket 'avatars'
     if (formData.foto_perfil) {
-      uploadedFiles.foto_perfil = await uploadAvatar(formData.foto_perfil)
+      console.log('📸 Subiendo foto de perfil a bucket avatars...')
+      uploadedFiles.foto_perfil = await uploadFile(
+        formData.foto_perfil,
+        'avatars',
+        null, // Sin subcarpeta, directo en userId/
+        'profile.jpg'
+      )
     }
 
-    // Subir documentos a COACH-DOCUMENTS
+    // SUBIR DOCUMENTOS al bucket 'documents'
     if (formData.ine_frente) {
-      uploadedFiles.ine_frente = await uploadDocument(formData.ine_frente, 'documents', 'ine_frente.jpg')
+      console.log('📄 Subiendo INE frente...')
+      uploadedFiles.ine_frente = await uploadFile(
+        formData.ine_frente,
+        'documents',
+        'coaches', // Carpeta coaches
+        'ine_frente.jpg'
+      )
     }
+
     if (formData.ine_reverso) {
-      uploadedFiles.ine_reverso = await uploadDocument(formData.ine_reverso, 'documents', 'ine_reverso.jpg')
+      console.log('📄 Subiendo INE reverso...')
+      uploadedFiles.ine_reverso = await uploadFile(
+        formData.ine_reverso,
+        'documents',
+        'coaches',
+        'ine_reverso.jpg'
+      )
     }
+
     if (formData.comprobante_domicilio) {
-      uploadedFiles.comprobante_domicilio = await uploadDocument(formData.comprobante_domicilio, 'documents', 'comprobante.pdf')
+      console.log('📄 Subiendo comprobante...')
+      uploadedFiles.comprobante_domicilio = await uploadFile(
+        formData.comprobante_domicilio,
+        'documents',
+        'coaches',
+        'comprobante.pdf'
+      )
     }
 
     console.log('✅ [API] Archivos subidos:', Object.keys(uploadedFiles))
 
-    // 4. Crear perfil (CON avatar)
+    // 4. Crear perfil (CON avatar en profiles.avatar_url)
     console.log('👤 [API] Creando perfil...')
     const { error: profileError } = await supabase
       .from('profiles')
@@ -174,7 +171,7 @@ export async function POST(request) {
         nombre: formData.nombre,
         apellidos: formData.apellidos,
         telefono: formData.telefono,
-        avatar_url: uploadedFiles.foto_perfil || null,
+        avatar_url: uploadedFiles.foto_perfil || null,  // ✅ ÚNICA fuente de verdad
         rol: 'coach',
         activo: true
       }, {
@@ -189,9 +186,9 @@ export async function POST(request) {
       )
     }
 
-    console.log('✅ [API] Perfil creado con avatar')
+    console.log('✅ [API] Perfil creado')
 
-    // 5. Crear coach
+    // 5. Crear coach (SIN foto_profesional_url, se usa avatar_url de profiles)
     console.log('💪 [API] Creando coach...')
     const { error: coachError } = await supabase
       .from('coaches')
@@ -214,7 +211,7 @@ export async function POST(request) {
         banco: formData.banco || null,
         clabe_encriptada: formData.clabe || null,
         titular_cuenta: formData.titular_cuenta || null,
-        foto_profesional_url: uploadedFiles.foto_perfil || null,
+        foto_profesional_url: null, // ❌ Ya no se usa, se obtiene de profiles.avatar_url
         estado: 'pendiente',
         activo: false
       })
@@ -238,7 +235,12 @@ export async function POST(request) {
           let archivoUrl = null
           
           if (cert.archivo) {
-            archivoUrl = await uploadDocument(cert.archivo, 'certifications', 'cert.pdf')
+            archivoUrl = await uploadFile(
+              cert.archivo,
+              'documents',
+              'coaches',
+              'cert.pdf'
+            )
           }
 
           return {
@@ -264,8 +266,8 @@ export async function POST(request) {
       }
     }
 
-    // 7. Guardar documentos
-    console.log('📄 [API] Guardando documentos...')
+    // 7. Guardar documentos en tabla coach_documents
+    console.log('📄 [API] Guardando referencias de documentos...')
     const documentos = []
     
     if (uploadedFiles.ine_frente) {
@@ -277,6 +279,7 @@ export async function POST(request) {
         verificado: false
       })
     }
+
     if (uploadedFiles.ine_reverso) {
       documentos.push({
         coach_id: userId,
@@ -286,6 +289,7 @@ export async function POST(request) {
         verificado: false
       })
     }
+
     if (uploadedFiles.comprobante_domicilio) {
       documentos.push({
         coach_id: userId,
@@ -328,7 +332,6 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('❌ [API] Error general:', error)
-    console.error('❌ [API] Error stack:', error.stack)
     return NextResponse.json(
       { error: 'Error procesando solicitud: ' + error.message },
       { status: 500 }
