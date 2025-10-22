@@ -12,6 +12,7 @@
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.75.0",
     "@tanstack/react-query": "^5.90.3",
+    "jspdf": "^3.0.3",
     "lucide-react": "^0.545.0",
     "next": "^15.5.6",
     "react": "^19.1.0",
