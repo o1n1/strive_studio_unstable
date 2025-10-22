@@ -34,39 +34,14 @@ export default function CoachDetailPage() {
       setError(null)
 
       const { data, error } = await supabase
-        .from('coaches')
-        .select(`
-          *,
-          profile:profiles!coaches_id_fkey(
-            id,
-            email,
-            nombre,
-            apellidos,
-            telefono,
-            avatar_url
-          ),
-          aprobador:profiles!coaches_aprobado_por_fkey(
-            nombre,
-            apellidos
-          )
-        `)
+        .from('coaches_complete')
+        .select('*')
         .eq('id', params.id)
         .single()
-
+      
       if (error) throw error
-
-      // Transformar datos
-      const coachTransformado = {
-        ...data,
-        email: data.profile?.email || '',
-        nombre: data.profile?.nombre || '',
-        apellidos: data.profile?.apellidos || '',
-        telefono: data.profile?.telefono || '',
-        avatar_url: data.profile?.avatar_url || null,
-        aprobado_por_nombre: data.aprobador 
-          ? `${data.aprobador.nombre} ${data.aprobador.apellidos}`.trim()
-          : null
-      }
+      
+      setCoach(data)
 
       setCoach(coachTransformado)
       console.log('🖼️ Coach completo:', coachTransformado)
