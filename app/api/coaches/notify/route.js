@@ -377,8 +377,9 @@ Equipo de ${STUDIO_NAME}
 }
 
 function generarEmailCorrecciones(coach, correcciones, admin) {
-  // ✅ CORRECCIÓN: Link correcto a la página de edición de perfil
-  const perfilUrl = `${STUDIO_URL}/coach/editar-perfil`
+  // ✅ CORRECCIÓN PRINCIPAL: Link al login con redirect y pre-llenado de email
+  // Esto asegura que el coach se autentique primero y luego sea redirigido a editar-perfil
+  const perfilUrl = `${STUDIO_URL}/login?redirect=/coach/editar-perfil&email=${encodeURIComponent(coach.email)}`
   
   const correccionesHTML = correcciones.map(corr => 
     `<li><strong>${corr.campo}:</strong> ${corr.mensaje}</li>`
@@ -420,27 +421,12 @@ function generarEmailCorrecciones(coach, correcciones, admin) {
       padding: 40px 30px; 
       background-color: #0A0A0A; 
     }
-    .content h2 {
-      color: #FFFCF3;
-      font-size: 24px;
-      margin-bottom: 20px;
-    }
-    .content p {
-      color: #B39A72;
-      line-height: 1.6;
-      margin: 15px 0;
-    }
-    .warning-box { 
-      background-color: rgba(239, 68, 68, 0.1); 
-      border: 1px solid rgba(239, 68, 68, 0.3); 
+    .alert-box { 
+      background-color: rgba(234, 179, 8, 0.2); 
+      border-left: 4px solid #eab308; 
       padding: 20px; 
       margin: 20px 0; 
       border-radius: 8px; 
-    }
-    .warning-box p {
-      color: #FFFCF3;
-      margin: 0;
-      font-size: 16px;
     }
     .button { 
       display: inline-block; 
@@ -452,37 +438,17 @@ function generarEmailCorrecciones(coach, correcciones, admin) {
       font-weight: bold; 
       margin: 20px 0; 
     }
-    .corrections-list { 
+    .info-box { 
       background-color: rgba(156, 122, 94, 0.1); 
-      border: 1px solid rgba(156, 122, 94, 0.3); 
-      padding: 20px; 
+      padding: 15px; 
       border-radius: 8px; 
-      margin: 20px 0; 
-    }
-    .corrections-list h3 {
-      color: #FFFCF3;
-      margin-top: 0;
-      margin-bottom: 15px;
-    }
-    .corrections-list ul {
-      color: #B39A72;
-      line-height: 1.8;
-      margin: 0;
-      padding-left: 20px;
-    }
-    .corrections-list li {
-      margin-bottom: 10px;
+      margin: 15px 0; 
     }
     .footer { 
       text-align: center; 
       padding: 30px; 
       color: #B39A72; 
       font-size: 12px; 
-      border-top: 1px solid rgba(156, 122, 94, 0.2);
-    }
-    .footer p {
-      margin: 5px 0;
-      color: #B39A72;
     }
   </style>
 </head>
@@ -493,24 +459,25 @@ function generarEmailCorrecciones(coach, correcciones, admin) {
     </div>
     
     <div class="content">
-      <h2>Hola ${coach.nombre} ${coach.apellidos},</h2>
+      <h2 style="color: #FFFCF3;">Hola ${coach.nombre} ${coach.apellidos},</h2>
       
       <p style="color: #B39A72; line-height: 1.6;">
         Hemos revisado tu solicitud para unirte a <strong style="color: #FFFCF3;">${STUDIO_NAME}</strong> 
         y necesitamos que realices algunas correcciones antes de poder continuar con el proceso de aprobación.
       </p>
 
-      <div class="warning-box">
-        <p style="color: #FFFCF3; margin: 0; font-size: 16px;">
-          <strong>Es importante que atiendas estos puntos lo antes posible para agilizar tu aprobación.</strong>
-        </p>
-      </div>
-
-      <div class="corrections-list">
-        <h3>📋 Correcciones Requeridas:</h3>
-        <ul>
+      <div class="alert-box">
+        <h3 style="color: #FFFCF3; margin-top: 0;">📋 Correcciones Requeridas:</h3>
+        <ul style="color: #FFFCF3; line-height: 1.8;">
           ${correccionesHTML}
         </ul>
+      </div>
+
+      <div class="info-box">
+        <p style="color: #B39A72; margin: 0;">
+          Una vez completadas las correcciones, nuestro equipo revisará nuevamente tu solicitud 
+          y te notificaremos sobre el siguiente paso.
+        </p>
       </div>
 
       <div style="text-align: center;">
@@ -518,10 +485,6 @@ function generarEmailCorrecciones(coach, correcciones, admin) {
       </div>
 
       <p style="color: #B39A72; margin-top: 30px;">
-        Una vez que hayas realizado las correcciones, nuestro equipo revisará nuevamente tu solicitud.
-      </p>
-
-      <p style="color: #B39A72;">
         Si tienes alguna pregunta, no dudes en contactarnos.<br>
         <strong style="color: #FFFCF3;">${admin.nombre} ${admin.apellidos}</strong><br>
         <em style="color: #9C7A5E;">Equipo de ${STUDIO_NAME}</em>
