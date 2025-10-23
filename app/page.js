@@ -4,9 +4,8 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
-import { Mail, Lock, AlertCircle } from 'lucide-react'
+import { Mail, Lock, AlertCircle, Loader2 } from 'lucide-react'
 import AuthLayout from '@/components/layouts/AuthLayout'
-import SessionCheckSkeleton from '@/components/skeletons/SessionCheckSkeleton'
 import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
@@ -144,8 +143,20 @@ export default function LoginPage() {
     }
   }
 
+  // ✅ NUEVO: Skeleton simple sin componente externo
   if (checkingSession) {
-    return <SessionCheckSkeleton />
+    return (
+      <AuthLayout>
+        <Card>
+          <div className="space-y-6 animate-pulse">
+            <div className="h-8 rounded" style={{ background: 'rgba(156, 122, 94, 0.2)' }}></div>
+            <div className="h-12 rounded" style={{ background: 'rgba(156, 122, 94, 0.2)' }}></div>
+            <div className="h-12 rounded" style={{ background: 'rgba(156, 122, 94, 0.2)' }}></div>
+            <div className="h-12 rounded" style={{ background: 'rgba(156, 122, 94, 0.2)' }}></div>
+          </div>
+        </Card>
+      </AuthLayout>
+    )
   }
 
   return (
