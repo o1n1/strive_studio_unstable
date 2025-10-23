@@ -1,67 +1,80 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
-import { Mail, Lock } from 'lucide-react'
+import { Mail, Lock, AlertCircle } from 'lucide-react'
 import AuthLayout from '@/components/layouts/AuthLayout'
+import SessionCheckSkeleton from '@/components/skeletons/SessionCheckSkeleton'
 import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
-import { supabase } from '@/lib/supabase/client'
-import { SessionCheckSkeleton } from '@/components/skeletons/AuthSkeleton'
+import { useUser } from '@/hooks/useUser'
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const queryClient = useQueryClient()
-  const [formData, setFormData] = useState({ email: '', password: '' })
+  const { profile, loading: userLoading } = useUser()
+  
+  const [formData, setFormData] = useState({
+    email: '',
+    password: ''
+  })
+  const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
-  const [errors, setErrors] = useState({})
 
-  // Verificar sesión existente al cargar
+  // ✅ NUEVO: Obtener parámetros de URL
+  const redirectUrl = searchParams?.get('redirect')
+  const emailFromUrl = searchParams?.get('email')
+
   useEffect(() => {
-    const checkExistingSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        
-        if (session) {
-          const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('rol')
-            .eq('id', session.user.id)
-            .single()
-          
-          if (profile && !error) {
-            // Setear caché antes de redirigir para carga instantánea
-            queryClient.setQueryData(['user'], {
-              user: session.user,
-              profile
-            })
-            
-            const redirectUrl = getRedirectUrl(profile.rol)
-            router.push(redirectUrl)
-            return
-          }
-        }
-      } catch (error) {
-        console.error('Error verificando sesión:', error)
-      } finally {
+    // ✅ NUEVO: Pre-llenar email si viene en la URL
+    if (emailFromUrl) {
+      setFormData(prev => ({ ...prev, email: decodeURIComponent(emailFromUrl) }))
+    }
+  }, [emailFromUrl])
+
+  useEffect(() => {
+    if (!userLoading) {
+      if (profile) {
+        // Ya hay sesión activa
+        // ✅ NUEVO: Si hay redirect, ir ahí, sino a su dashboard
+        const targetUrl = redirectUrl || getRedirectUrl(profile.rol)
+        router.push(targetUrl)
+      } else {
         setCheckingSession(false)
       }
     }
-    
-    checkExistingSession()
-  }, [router, queryClient])
+  }, [profile, userLoading, redirectUrl])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setErrors({})
     setLoading(true)
+    setErrors({})
+
+    // Validaciones
+    if (!formData.email.trim()) {
+      setErrors({ email: 'El email es requerido' })
+      setLoading(false)
+      return
+    }
+
+    if (!formData.password) {
+      setErrors({ password: 'La contraseña es requerida' })
+      setLoading(false)
+      return
+    }
 
     try {
-      // Login con Supabase
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      )
+
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: formData.email.trim().toLowerCase(),
         password: formData.password
@@ -89,14 +102,17 @@ export default function LoginPage() {
         return
       }
 
-      // 🚀 MEJORA: Setear caché ANTES de redirigir para carga instantánea
+      // Setear caché ANTES de redirigir para carga instantánea
       queryClient.setQueryData(['user'], {
         user: authData.user,
         profile
       })
 
-      const redirectUrl = getRedirectUrl(profile.rol)
-      router.push(redirectUrl)
+      // ✅ MEJORA: Si hay redirectUrl, ir ahí, sino al dashboard según rol
+      const targetUrl = redirectUrl || getRedirectUrl(profile.rol)
+      
+      console.log('✅ Login exitoso, redirigiendo a:', targetUrl)
+      router.push(targetUrl)
 
     } catch (error) {
       let errorMessage = 'Error al iniciar sesión. Intenta de nuevo.'
@@ -136,6 +152,22 @@ export default function LoginPage() {
     <AuthLayout>
       <Card>
         <form onSubmit={handleSubmit} className="space-y-6">
+          
+          {/* ✅ NUEVO: Mostrar mensaje si viene de correcciones */}
+          {redirectUrl === '/coach/editar-perfil' && (
+            <div className="p-4 rounded-xl flex items-start gap-3" 
+              style={{ background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
+              <AlertCircle size={20} style={{ color: '#eab308' }} className="flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold mb-1" style={{ color: '#eab308', fontFamily: 'Montserrat, sans-serif' }}>
+                  Correcciones Necesarias
+                </p>
+                <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Inicia sesión para editar tu perfil y completar las correcciones solicitadas.
+                </p>
+              </div>
+            </div>
+          )}
           
           {errors.general && (
             <div className="p-4 rounded-xl" 
@@ -198,31 +230,20 @@ export default function LoginPage() {
             </Link>
           </div>
 
-          <div className="pt-3">
-            <Button type="submit" loading={loading}>
-              {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
-            </Button>
-          </div>
+          <Button type="submit" loading={loading}>
+            Iniciar Sesión
+          </Button>
 
-          <div className="relative my-8">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t opacity-20" style={{ borderColor: '#9C7A5E' }}></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span 
-                className="px-4 text-sm opacity-60" 
-                style={{ backgroundColor: 'rgba(53, 53, 53, 0.8)', color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}
-              >
-                ¿Primera vez?
-              </span>
-            </div>
-          </div>
-
-          <Link href="/registro">
-            <Button variant="secondary" type="button" disabled={loading}>
-              Crear Cuenta Nueva
-            </Button>
-          </Link>
+          <p className="text-sm text-center opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+            ¿Aún no tienes cuenta?{' '}
+            <Link 
+              href="/registro" 
+              className="font-semibold transition-all hover:opacity-80 hover:underline" 
+              style={{ color: '#AE3F21' }}
+            >
+              Regístrate aquí
+            </Link>
+          </p>
         </form>
       </Card>
     </AuthLayout>
