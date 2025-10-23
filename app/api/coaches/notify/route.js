@@ -377,7 +377,7 @@ Equipo de ${STUDIO_NAME}
 }
 
 function generarEmailCorrecciones(coach, correcciones, admin) {
-  const loginUrl = `${STUDIO_URL}/login`
+  const perfilUrl = `${STUDIO_URL}/coach/perfil`
 
   const correccionesHTML = correcciones.map(corr => 
     `<li style="margin-bottom: 10px;">
@@ -435,7 +435,7 @@ function generarEmailCorrecciones(coach, correcciones, admin) {
       </div>
 
       <div style="text-align: center;">
-        <a href="${loginUrl}" class="button">Editar mi Perfil</a>
+        <a href="${perfilUrl}" class="button">Editar mi Perfil</a>
       </div>
 
       <p style="color: #B39A72; margin-top: 30px;">
@@ -469,7 +469,7 @@ Correcciones Requeridas:
 ${correccionesText}
 
 Accede a tu perfil para hacer los cambios:
-${loginUrl}
+${perfilUrl}
 
 Una vez completadas, revisaremos nuevamente tu solicitud.
 
