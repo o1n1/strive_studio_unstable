@@ -1,17 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
-import { Mail, Lock, AlertCircle, Loader2 } from 'lucide-react'
+import { Mail, Lock, AlertCircle } from 'lucide-react'
 import AuthLayout from '@/components/layouts/AuthLayout'
 import Card from '@/components/ui/Card'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
 import { useUser } from '@/hooks/useUser'
 
-export default function LoginPage() {
+// ✅ Componente interno que usa useSearchParams
+function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
@@ -25,12 +26,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
 
-  // ✅ NUEVO: Obtener parámetros de URL
+  // Obtener parámetros de URL
   const redirectUrl = searchParams?.get('redirect')
   const emailFromUrl = searchParams?.get('email')
 
   useEffect(() => {
-    // ✅ NUEVO: Pre-llenar email si viene en la URL
+    // Pre-llenar email si viene en la URL
     if (emailFromUrl) {
       setFormData(prev => ({ ...prev, email: decodeURIComponent(emailFromUrl) }))
     }
@@ -40,14 +41,13 @@ export default function LoginPage() {
     if (!userLoading) {
       if (profile) {
         // Ya hay sesión activa
-        // ✅ NUEVO: Si hay redirect, ir ahí, sino a su dashboard
         const targetUrl = redirectUrl || getRedirectUrl(profile.rol)
         router.push(targetUrl)
       } else {
         setCheckingSession(false)
       }
     }
-  }, [profile, userLoading, redirectUrl])
+  }, [profile, userLoading, redirectUrl, router])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -107,7 +107,7 @@ export default function LoginPage() {
         profile
       })
 
-      // ✅ MEJORA: Si hay redirectUrl, ir ahí, sino al dashboard según rol
+      // Si hay redirectUrl, ir ahí, sino al dashboard según rol
       const targetUrl = redirectUrl || getRedirectUrl(profile.rol)
       
       console.log('✅ Login exitoso, redirigiendo a:', targetUrl)
@@ -143,10 +143,125 @@ export default function LoginPage() {
     }
   }
 
-  // ✅ NUEVO: Skeleton simple sin componente externo
+  // Skeleton simple mientras verifica sesión
   if (checkingSession) {
     return (
-      <AuthLayout>
+      <Card>
+        <div className="space-y-6 animate-pulse">
+          <div className="h-8 rounded" style={{ background: 'rgba(156, 122, 94, 0.2)' }}></div>
+          <div className="h-12 rounded" style={{ background: 'rgba(156, 122, 94, 0.2)' }}></div>
+          <div className="h-12 rounded" style={{ background: 'rgba(156, 122, 94, 0.2)' }}></div>
+          <div className="h-12 rounded" style={{ background: 'rgba(156, 122, 94, 0.2)' }}></div>
+        </div>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        
+        {/* Mostrar mensaje si viene de correcciones */}
+        {redirectUrl === '/coach/editar-perfil' && (
+          <div className="p-4 rounded-xl flex items-start gap-3" 
+            style={{ background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
+            <AlertCircle size={20} style={{ color: '#eab308' }} className="flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold mb-1" style={{ color: '#eab308', fontFamily: 'Montserrat, sans-serif' }}>
+                Correcciones Necesarias
+              </p>
+              <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Inicia sesión para editar tu perfil y completar las correcciones solicitadas.
+              </p>
+            </div>
+          </div>
+        )}
+        
+        {errors.general && (
+          <div className="p-4 rounded-xl" 
+            style={{ background: 'rgba(174, 63, 33, 0.1)', border: '1px solid rgba(174, 63, 33, 0.3)' }}>
+            <p className="text-sm" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
+              {errors.general}
+            </p>
+          </div>
+        )}
+        
+        <Input
+          label="Email"
+          icon={Mail}
+          type="email"
+          required
+          disabled={loading}
+          value={formData.email}
+          onChange={(e) => {
+            setFormData({ ...formData, email: e.target.value })
+            setErrors({ ...errors, email: '' })
+          }}
+          placeholder="tu@email.com"
+          error={errors.email}
+        />
+
+        <Input
+          label="Contraseña"
+          icon={Lock}
+          type="password"
+          required
+          disabled={loading}
+          value={formData.password}
+          onChange={(e) => {
+            setFormData({ ...formData, password: e.target.value })
+            setErrors({ ...errors, password: '' })
+          }}
+          placeholder="••••••••"
+          error={errors.password}
+        />
+
+        <div className="flex items-center justify-between text-sm pt-1">
+          <label 
+            className="flex items-center cursor-pointer opacity-80 hover:opacity-100 transition-opacity" 
+            style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}
+          >
+            <input 
+              type="checkbox" 
+              className="mr-2 rounded" 
+              style={{ accentColor: '#AE3F21' }} 
+              disabled={loading}
+            />
+            Recordarme
+          </label>
+          <Link 
+            href="/recuperar" 
+            className="transition-colors hover:underline opacity-80 hover:opacity-100" 
+            style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}
+          >
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </div>
+
+        <Button type="submit" loading={loading}>
+          Iniciar Sesión
+        </Button>
+
+        <p className="text-sm text-center opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+          ¿Aún no tienes cuenta?{' '}
+          <Link 
+            href="/registro" 
+            className="font-semibold transition-all hover:opacity-80 hover:underline" 
+            style={{ color: '#AE3F21' }}
+          >
+            Regístrate aquí
+          </Link>
+        </p>
+      </form>
+    </Card>
+  )
+}
+
+// ✅ Componente principal con Suspense boundary
+export default function LoginPage() {
+  return (
+    <AuthLayout>
+      <Suspense fallback={
         <Card>
           <div className="space-y-6 animate-pulse">
             <div className="h-8 rounded" style={{ background: 'rgba(156, 122, 94, 0.2)' }}></div>
@@ -155,108 +270,9 @@ export default function LoginPage() {
             <div className="h-12 rounded" style={{ background: 'rgba(156, 122, 94, 0.2)' }}></div>
           </div>
         </Card>
-      </AuthLayout>
-    )
-  }
-
-  return (
-    <AuthLayout>
-      <Card>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          
-          {/* ✅ NUEVO: Mostrar mensaje si viene de correcciones */}
-          {redirectUrl === '/coach/editar-perfil' && (
-            <div className="p-4 rounded-xl flex items-start gap-3" 
-              style={{ background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
-              <AlertCircle size={20} style={{ color: '#eab308' }} className="flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-semibold mb-1" style={{ color: '#eab308', fontFamily: 'Montserrat, sans-serif' }}>
-                  Correcciones Necesarias
-                </p>
-                <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Inicia sesión para editar tu perfil y completar las correcciones solicitadas.
-                </p>
-              </div>
-            </div>
-          )}
-          
-          {errors.general && (
-            <div className="p-4 rounded-xl" 
-              style={{ background: 'rgba(174, 63, 33, 0.1)', border: '1px solid rgba(174, 63, 33, 0.3)' }}>
-              <p className="text-sm" style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}>
-                {errors.general}
-              </p>
-            </div>
-          )}
-          
-          <Input
-            label="Email"
-            icon={Mail}
-            type="email"
-            required
-            disabled={loading}
-            value={formData.email}
-            onChange={(e) => {
-              setFormData({ ...formData, email: e.target.value })
-              setErrors({ ...errors, email: '' })
-            }}
-            placeholder="tu@email.com"
-            error={errors.email}
-          />
-
-          <Input
-            label="Contraseña"
-            icon={Lock}
-            type="password"
-            required
-            disabled={loading}
-            value={formData.password}
-            onChange={(e) => {
-              setFormData({ ...formData, password: e.target.value })
-              setErrors({ ...errors, password: '' })
-            }}
-            placeholder="••••••••"
-            error={errors.password}
-          />
-
-          <div className="flex items-center justify-between text-sm pt-1">
-            <label 
-              className="flex items-center cursor-pointer opacity-80 hover:opacity-100 transition-opacity" 
-              style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}
-            >
-              <input 
-                type="checkbox" 
-                className="mr-2 rounded" 
-                style={{ accentColor: '#AE3F21' }} 
-                disabled={loading}
-              />
-              Recordarme
-            </label>
-            <Link 
-              href="/recuperar" 
-              className="transition-colors hover:underline opacity-80 hover:opacity-100" 
-              style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}
-            >
-              ¿Olvidaste tu contraseña?
-            </Link>
-          </div>
-
-          <Button type="submit" loading={loading}>
-            Iniciar Sesión
-          </Button>
-
-          <p className="text-sm text-center opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-            ¿Aún no tienes cuenta?{' '}
-            <Link 
-              href="/registro" 
-              className="font-semibold transition-all hover:opacity-80 hover:underline" 
-              style={{ color: '#AE3F21' }}
-            >
-              Regístrate aquí
-            </Link>
-          </p>
-        </form>
-      </Card>
+      }>
+        <LoginForm />
+      </Suspense>
     </AuthLayout>
   )
 }
