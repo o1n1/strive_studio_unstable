@@ -83,62 +83,51 @@ export async function POST(request) {
       )
     }
 
-    if (tipo === 'rechazo' && !motivo) {
-      return NextResponse.json(
-        { error: 'Motivo es requerido para rechazos' },
-        { status: 400 }
-      )
-    }
-
-    if (tipo === 'correcciones' && (!correcciones || correcciones.length === 0)) {
-      return NextResponse.json(
-        { error: 'Lista de correcciones es requerida' },
-        { status: 400 }
-      )
-    }
-
     // Obtener datos del coach
-    console.log('📧 [NOTIFY API] Obteniendo datos del coach...')
-    const { data: coachData, error: coachError } = await supabase
+    const { data: coach, error: coachError } = await supabase
       .from('coaches_complete')
       .select('*')
       .eq('id', coachId)
       .single()
 
-    if (coachError || !coachData) {
-      console.error('❌ [NOTIFY API] Error obteniendo coach:', coachError)
+    if (coachError || !coach) {
       return NextResponse.json(
         { error: 'Coach no encontrado' },
         { status: 404 }
       )
     }
 
-    console.log('📧 [NOTIFY API] Coach encontrado:', coachData.email)
+    console.log('📧 [NOTIFY API] Coach encontrado:', coach.email)
 
-    // Generar email según el tipo
-    let emailData
+    // Generar contenido del email según el tipo
+    let emailContent
+
     switch (tipo) {
       case 'aprobacion':
-        emailData = generarEmailAprobacion(coachData, profile)
+        emailContent = generarEmailAprobacion(coach, profile)
         break
       case 'rechazo':
-        emailData = generarEmailRechazo(coachData, motivo, profile)
+        if (!motivo) {
+          return NextResponse.json(
+            { error: 'Motivo es requerido para rechazo' },
+            { status: 400 }
+          )
+        }
+        emailContent = generarEmailRechazo(coach, motivo, profile)
         break
       case 'correcciones':
-        emailData = generarEmailCorrecciones(coachData, correcciones, profile)
+        if (!correcciones || correcciones.length === 0) {
+          return NextResponse.json(
+            { error: 'Correcciones son requeridas' },
+            { status: 400 }
+          )
+        }
+        emailContent = generarEmailCorrecciones(coach, correcciones, profile)
         break
     }
 
-    // Enviar email usando Resend
-    console.log('📧 [NOTIFY API] Enviando email a:', coachData.email)
-    
-    const emailPayload = {
-      from: `${STUDIO_NAME} <${FROM_EMAIL}>`,
-      to: [coachData.email],
-      subject: emailData.subject,
-      html: emailData.html,
-      text: emailData.text
-    }
+    // Enviar email
+    console.log('📧 [NOTIFY API] Enviando email a:', coach.email)
 
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -146,28 +135,35 @@ export async function POST(request) {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(emailPayload)
+      body: JSON.stringify({
+        from: `${STUDIO_NAME} <${FROM_EMAIL}>`,
+        to: [coach.email],
+        subject: emailContent.subject,
+        html: emailContent.html,
+        text: emailContent.text
+      })
     })
 
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error('❌ [NOTIFY API] Error de Resend:', errorText)
-      throw new Error(`Error al enviar email: ${response.status} - ${errorText}`)
+      const errorData = await response.text()
+      console.error('❌ [NOTIFY API] Error de Resend:', errorData)
+      return NextResponse.json(
+        { error: 'Error al enviar email: ' + errorData },
+        { status: 500 }
+      )
     }
 
-    const result = await response.json()
-    console.log('✅ [NOTIFY API] Email enviado exitosamente:', result.id)
+    const data = await response.json()
+    console.log('✅ [NOTIFY API] Email enviado exitosamente:', data.id)
 
     return NextResponse.json({
       success: true,
-      message: 'Notificación enviada exitosamente',
-      emailId: result.id,
-      tipo,
-      coachEmail: coachData.email
+      emailId: data.id,
+      message: 'Email enviado exitosamente'
     })
 
   } catch (error) {
-    console.error('❌ [NOTIFY API] Error general:', error)
+    console.error('❌ [NOTIFY API] Error:', error)
     return NextResponse.json(
       { error: 'Error al enviar notificación: ' + error.message },
       { status: 500 }
@@ -175,12 +171,11 @@ export async function POST(request) {
   }
 }
 
-// ==========================================
-// GENERADORES DE EMAILS
-// ==========================================
+// ===== FUNCIONES GENERADORAS DE EMAILS =====
 
 function generarEmailAprobacion(coach, admin) {
-  const loginUrl = `${STUDIO_URL}/login`
+  // ✅ RUTA CORREGIDA: /coaches/dashboard (no /coach/dashboard)
+  const loginUrl = `${STUDIO_URL}/coaches/dashboard`
 
   const html = `
 <!DOCTYPE html>
@@ -190,11 +185,10 @@ function generarEmailAprobacion(coach, admin) {
   <style>
     body { font-family: 'Arial', sans-serif; background-color: #0A0A0A; color: #FFFCF3; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 0 auto; background-color: #0A0A0A; }
-    .header { background: linear-gradient(135deg, #AE3F21 0%, #9C7A5E 100%); padding: 40px 20px; text-align: center; }
+    .header { background: linear-gradient(135deg, #9C7A5E 0%, #AE3F21 100%); padding: 40px 20px; text-align: center; }
     .header h1 { color: #FFFCF3; margin: 0; font-size: 28px; }
     .content { padding: 40px 30px; background-color: #0A0A0A; }
-    .welcome-box { background-color: rgba(174, 63, 33, 0.1); border-left: 4px solid #AE3F21; padding: 20px; margin: 20px 0; border-radius: 8px; }
-    .button { display: inline-block; background-color: #AE3F21; color: #FFFCF3; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+    .button { display: inline-block; background: linear-gradient(135deg, #9C7A5E 0%, #AE3F21 100%); color: #FFFCF3; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
     .info-box { background-color: rgba(156, 122, 94, 0.1); padding: 15px; border-radius: 8px; margin: 15px 0; }
     .footer { text-align: center; padding: 30px; color: #B39A72; font-size: 12px; }
   </style>
@@ -206,44 +200,34 @@ function generarEmailAprobacion(coach, admin) {
     </div>
     
     <div class="content">
-      <h2 style="color: #FFFCF3;">Hola ${coach.nombre} ${coach.apellidos},</h2>
-      
-      <div class="welcome-box">
-        <p style="color: #FFFCF3; font-size: 18px; margin: 0;">
-          <strong>¡Felicidades! Tu solicitud ha sido aprobada.</strong>
-        </p>
-      </div>
+      <h2 style="color: #FFFCF3;">¡Felicidades ${coach.nombre} ${coach.apellidos}!</h2>
       
       <p style="color: #B39A72; line-height: 1.6;">
-        Nos complace informarte que has sido oficialmente aprobado como coach de <strong style="color: #FFFCF3;">${STUDIO_NAME}</strong>. 
-        Tu perfil ha sido revisado y verificado exitosamente por nuestro equipo.
+        Nos complace informarte que <strong style="color: #FFFCF3;">has sido oficialmente aprobado</strong> 
+        como coach de <strong style="color: #FFFCF3;">${STUDIO_NAME}</strong>. ¡Estamos emocionados de tenerte en el equipo!
       </p>
 
       <div class="info-box">
         <h3 style="color: #FFFCF3; margin-top: 0;">📋 Próximos Pasos:</h3>
-        <ul style="color: #B39A72; line-height: 1.8;">
-          <li>Accede a tu cuenta con tus credenciales</li>
+        <ul style="color: #B39A72;">
+          <li>Accede a tu cuenta usando el botón de abajo</li>
           <li>Revisa tu calendario de clases asignadas</li>
           <li>Familiarízate con el dashboard de coaches</li>
-          <li>Mantén tus certificaciones actualizadas</li>
+          <li>Configura tus horarios de disponibilidad</li>
         </ul>
       </div>
 
       <div style="text-align: center;">
-        <a href="${loginUrl}" class="button">Acceder a mi Dashboard</a>
+        <a href="${loginUrl}" class="button">Acceder a Mi Dashboard →</a>
       </div>
 
-      <div class="info-box" style="margin-top: 30px;">
-        <p style="color: #B39A72; margin: 0; font-size: 14px;">
-          <strong style="color: #FFFCF3;">Credenciales de acceso:</strong><br>
-          Email: ${coach.email}<br>
-          Contraseña: La que configuraste durante el registro
+      <div class="info-box">
+        <h3 style="color: #FFFCF3; margin-top: 0;">🔐 Tus Credenciales:</h3>
+        <p style="color: #B39A72; margin: 0;">
+          <strong>Email:</strong> ${coach.email}<br>
+          <strong>Contraseña:</strong> La que configuraste durante el registro
         </p>
       </div>
-
-      <p style="color: #B39A72; margin-top: 30px;">
-        Si tienes alguna pregunta o necesitas ayuda, no dudes en contactarnos.
-      </p>
 
       <p style="color: #B39A72;">
         ¡Estamos emocionados de tenerte en el equipo!<br>
@@ -255,6 +239,10 @@ function generarEmailAprobacion(coach, admin) {
     <div class="footer">
       <p>${STUDIO_NAME} © ${new Date().getFullYear()}</p>
       <p>Este es un email automático, por favor no responder.</p>
+      <p style="margin-top: 15px; font-size: 11px;">
+        Si el botón no funciona, copia y pega este link en tu navegador:<br>
+        <span style="color: #AE3F21;">${loginUrl}</span>
+      </p>
     </div>
   </div>
 </body>
@@ -333,12 +321,8 @@ function generarEmailRechazo(coach, motivo, admin) {
         </p>
       </div>
 
-      <p style="color: #B39A72; margin-top: 30px;">
-        Si tienes alguna pregunta sobre esta decisión, no dudes en contactarnos.
-      </p>
-
       <p style="color: #B39A72;">
-        Te deseamos mucho éxito en tus proyectos futuros.<br>
+        Si tienes alguna pregunta, no dudes en contactarnos.<br>
         <strong style="color: #FFFCF3;">${admin.nombre} ${admin.apellidos}</strong><br>
         <em style="color: #9C7A5E;">Equipo de ${STUDIO_NAME}</em>
       </p>
@@ -358,12 +342,15 @@ Actualización de tu Solicitud
 
 Hola ${coach.nombre} ${coach.apellidos},
 
-Lamentamos informarte que en este momento no podemos continuar con tu aplicación para ${STUDIO_NAME}.
+Gracias por tu interés en formar parte del equipo de ${STUDIO_NAME}. 
+Después de revisar cuidadosamente tu solicitud, lamentamos informarte que en este momento no podemos continuar con tu aplicación.
 
 Motivo:
 ${motivo}
 
-Esta decisión no refleja tu valor como profesional. Te animamos a considerar aplicar nuevamente en el futuro.
+Esta decisión no refleja tu valor como profesional. Te animamos a seguir desarrollando tus habilidades y considerar aplicar nuevamente en el futuro.
+
+Si tienes alguna pregunta, no dudes en contactarnos.
 
 ${admin.nombre} ${admin.apellidos}
 Equipo de ${STUDIO_NAME}
@@ -377,17 +364,22 @@ Equipo de ${STUDIO_NAME}
 }
 
 function generarEmailCorrecciones(coach, correcciones, admin) {
-  // ✅ CORRECCIÓN PRINCIPAL: Link al login con redirect y pre-llenado de email
-  // Esto asegura que el coach se autentique primero y luego sea redirigido a editar-perfil
-  const perfilUrl = `${STUDIO_URL}/login?redirect=/coach/editar-perfil&email=${encodeURIComponent(coach.email)}`
-  
-  const correccionesHTML = correcciones.map(corr => 
-    `<li><strong>${corr.campo}:</strong> ${corr.mensaje}</li>`
-  ).join('')
+  // ✅ RUTA CORREGIDA: Debe ir a una página donde el coach pueda ver y corregir su info
+  // Según tu estructura, debería ser el admin quien ve el perfil del coach
+  // O si el coach tiene acceso a editar su perfil, sería /coaches/perfil
+  const perfilUrl = `${STUDIO_URL}/coaches/perfil`
 
-  const correccionesText = correcciones.map(corr => 
-    `• ${corr.campo}: ${corr.mensaje}`
-  ).join('\n')
+  const correccionesHtml = correcciones
+    .map((c, i) => `
+      <div style="margin: 10px 0;">
+        <strong style="color: #FFFCF3;">${i + 1}. ${c}</strong>
+      </div>
+    `)
+    .join('')
+
+  const correccionesText = correcciones
+    .map((c, i) => `${i + 1}. ${c}`)
+    .join('\n')
 
   const html = `
 <!DOCTYPE html>
@@ -395,61 +387,15 @@ function generarEmailCorrecciones(coach, correcciones, admin) {
 <head>
   <meta charset="utf-8">
   <style>
-    body { 
-      font-family: 'Arial', sans-serif; 
-      background-color: #0A0A0A; 
-      color: #FFFCF3; 
-      margin: 0; 
-      padding: 0; 
-    }
-    .container { 
-      max-width: 600px; 
-      margin: 0 auto; 
-      background-color: #0A0A0A; 
-    }
-    .header { 
-      background: linear-gradient(135deg, #AE3F21 0%, #9C7A5E 100%); 
-      padding: 40px 20px; 
-      text-align: center; 
-    }
-    .header h1 { 
-      color: #FFFCF3; 
-      margin: 0; 
-      font-size: 28px; 
-    }
-    .content { 
-      padding: 40px 30px; 
-      background-color: #0A0A0A; 
-    }
-    .alert-box { 
-      background-color: rgba(234, 179, 8, 0.2); 
-      border-left: 4px solid #eab308; 
-      padding: 20px; 
-      margin: 20px 0; 
-      border-radius: 8px; 
-    }
-    .button { 
-      display: inline-block; 
-      background-color: #AE3F21; 
-      color: #FFFCF3; 
-      padding: 15px 40px; 
-      text-decoration: none; 
-      border-radius: 8px; 
-      font-weight: bold; 
-      margin: 20px 0; 
-    }
-    .info-box { 
-      background-color: rgba(156, 122, 94, 0.1); 
-      padding: 15px; 
-      border-radius: 8px; 
-      margin: 15px 0; 
-    }
-    .footer { 
-      text-align: center; 
-      padding: 30px; 
-      color: #B39A72; 
-      font-size: 12px; 
-    }
+    body { font-family: 'Arial', sans-serif; background-color: #0A0A0A; color: #FFFCF3; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 0 auto; background-color: #0A0A0A; }
+    .header { background: linear-gradient(135deg, #9C7A5E 0%, #AE3F21 100%); padding: 40px 20px; text-align: center; }
+    .header h1 { color: #FFFCF3; margin: 0; font-size: 28px; }
+    .content { padding: 40px 30px; background-color: #0A0A0A; }
+    .button { display: inline-block; background: linear-gradient(135deg, #9C7A5E 0%, #AE3F21 100%); color: #FFFCF3; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+    .warning-box { background-color: rgba(174, 63, 33, 0.2); border-left: 4px solid #AE3F21; padding: 20px; margin: 20px 0; border-radius: 8px; }
+    .info-box { background-color: rgba(156, 122, 94, 0.1); padding: 15px; border-radius: 8px; margin: 15px 0; }
+    .footer { text-align: center; padding: 30px; color: #B39A72; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -466,25 +412,23 @@ function generarEmailCorrecciones(coach, correcciones, admin) {
         y necesitamos que realices algunas correcciones antes de poder continuar con el proceso de aprobación.
       </p>
 
-      <div class="alert-box">
+      <div class="warning-box">
         <h3 style="color: #FFFCF3; margin-top: 0;">📋 Correcciones Requeridas:</h3>
-        <ul style="color: #FFFCF3; line-height: 1.8;">
-          ${correccionesHTML}
-        </ul>
+        ${correccionesHtml}
+      </div>
+
+      <div style="text-align: center;">
+        <a href="${perfilUrl}" class="button">Realizar Correcciones →</a>
       </div>
 
       <div class="info-box">
         <p style="color: #B39A72; margin: 0;">
-          Una vez completadas las correcciones, nuestro equipo revisará nuevamente tu solicitud 
-          y te notificaremos sobre el siguiente paso.
+          Una vez completadas las correcciones, revisaremos nuevamente tu solicitud. 
+          Si tienes dudas sobre algún punto, no dudes en contactarnos.
         </p>
       </div>
 
-      <div style="text-align: center;">
-        <a href="${perfilUrl}" class="button">Editar mi Perfil</a>
-      </div>
-
-      <p style="color: #B39A72; margin-top: 30px;">
+      <p style="color: #B39A72;">
         Si tienes alguna pregunta, no dudes en contactarnos.<br>
         <strong style="color: #FFFCF3;">${admin.nombre} ${admin.apellidos}</strong><br>
         <em style="color: #9C7A5E;">Equipo de ${STUDIO_NAME}</em>
