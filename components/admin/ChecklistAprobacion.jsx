@@ -3,18 +3,25 @@
 import { useState, useEffect } from 'react'
 import { 
   CheckCircle, XCircle, AlertCircle, Clock, 
-  FileText, Award, CreditCard, FileCheck, Send 
+  FileText, Award, CreditCard, FileCheck, Send, Eye, Download
 } from 'lucide-react'
+import Image from 'next/image'
 
 export default function ChecklistAprobacion({ coach, onSuccess }) {
   const [checklist, setChecklist] = useState({
     documentos_completos: false,
     documentos_verificados: false,
-    certificaciones_validas: false,
+    certificaciones_validas: false, // Ahora es opcional
     info_bancaria_completa: false,
     contrato_firmado: false,
     perfil_completo: false
   })
+  
+  const [documentos, setDocumentos] = useState([])
+  const [certificaciones, setCertificaciones] = useState([])
+  const [mostrarDocumentos, setMostrarDocumentos] = useState(false)
+  const [vistaPrevia, setVistaPrevia] = useState(null)
+  const [procesando, setProcesando] = useState(null)
   
   const [loading, setLoading] = useState(false)
   const [showRechazarModal, setShowRechazarModal] = useState(false)
@@ -25,12 +32,91 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
   useEffect(() => {
     if (coach) {
       verificarChecklist()
+      cargarDocumentos()
+      cargarCertificaciones()
     }
   }, [coach])
 
+  const cargarDocumentos = async () => {
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      )
+
+      const { data, error } = await supabase
+        .from('coach_documents')
+        .select('*')
+        .eq('coach_id', coach.id)
+        .order('fecha_subida', { ascending: false })
+
+      if (error) throw error
+      setDocumentos(data || [])
+    } catch (error) {
+      console.error('Error cargando documentos:', error)
+    }
+  }
+
+  const cargarCertificaciones = async () => {
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      )
+
+      const { data, error } = await supabase
+        .from('coach_certifications')
+        .select('*')
+        .eq('coach_id', coach.id)
+
+      if (error) throw error
+      setCertificaciones(data || [])
+    } catch (error) {
+      console.error('Error cargando certificaciones:', error)
+    }
+  }
+
+  const verificarDocumento = async (documentoId, verificado) => {
+    setProcesando(documentoId)
+    
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      )
+
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('No hay sesión activa')
+
+      const { error } = await supabase
+        .from('coach_documents')
+        .update({
+          verificado: verificado,
+          verificado_por: verificado ? session.user.id : null,
+          fecha_verificacion: verificado ? new Date().toISOString() : null
+        })
+        .eq('id', documentoId)
+
+      if (error) throw error
+
+      await cargarDocumentos()
+      await verificarChecklist()
+
+      alert(verificado ? '✅ Documento verificado' : '⚠️ Documento marcado como no verificado')
+
+    } catch (error) {
+      console.error('Error verificando documento:', error)
+      alert('Error al verificar documento')
+    } finally {
+      setProcesando(null)
+    }
+  }
+
   const verificarChecklist = async () => {
     try {
-      // Verificar documentos completos y verificados
       const docsRequeridos = ['ine_frente', 'ine_reverso', 'comprobante_domicilio']
       const { createClient } = await import('@supabase/supabase-js')
       const supabase = createClient(
@@ -45,28 +131,29 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
 
       const docsSubidos = documentos?.map(d => d.tipo) || []
       const todosDocsSubidos = docsRequeridos.every(req => docsSubidos.includes(req))
-      const todosDocsVerificados = documentos?.every(d => d.verificado) || false
+      const todosDocsVerificados = docsRequeridos.every(req => {
+        const doc = documentos?.find(d => d.tipo === req)
+        return doc?.verificado === true
+      })
 
-      // Verificar certificaciones
+      // Certificaciones: ahora son opcionales, pero si existen deben ser válidas
       const { data: certificaciones } = await supabase
         .from('coach_certifications')
         .select('*')
         .eq('coach_id', coach.id)
 
       const tieneCertificaciones = (certificaciones?.length || 0) > 0
-      const certVigentes = certificaciones?.every(cert => {
+      const certVigentes = !tieneCertificaciones || certificaciones?.every(cert => {
         if (!cert.fecha_vigencia) return true
         return new Date(cert.fecha_vigencia) > new Date()
-      }) || false
+      })
 
-      // Verificar info bancaria
       const infoBancariaCompleta = !!(
         coach.banco && 
         coach.clabe_encriptada && 
         coach.titular_cuenta
       )
 
-      // Verificar contrato firmado
       const { data: contratos } = await supabase
         .from('coach_contracts')
         .select('firmado, vigente')
@@ -75,7 +162,6 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
 
       const contratoFirmado = contratos?.some(c => c.firmado) || false
 
-      // Verificar perfil completo
       const perfilCompleto = !!(
         coach.nombre &&
         coach.apellidos &&
@@ -89,7 +175,7 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
       setChecklist({
         documentos_completos: todosDocsSubidos,
         documentos_verificados: todosDocsVerificados,
-        certificaciones_validas: tieneCertificaciones && certVigentes,
+        certificaciones_validas: certVigentes, // Siempre true si no hay certs
         info_bancaria_completa: infoBancariaCompleta,
         contrato_firmado: contratoFirmado,
         perfil_completo: perfilCompleto
@@ -101,11 +187,19 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
   }
 
   const handleAprobar = async () => {
-    // Verificar que todo esté completo
-    const todosVerificados = Object.values(checklist).every(v => v === true)
+    // Solo verificar items obligatorios (certificaciones son opcionales)
+    const itemsObligatorios = {
+      documentos_completos: checklist.documentos_completos,
+      documentos_verificados: checklist.documentos_verificados,
+      info_bancaria_completa: checklist.info_bancaria_completa,
+      contrato_firmado: checklist.contrato_firmado,
+      perfil_completo: checklist.perfil_completo
+    }
+    
+    const todosVerificados = Object.values(itemsObligatorios).every(v => v === true)
     
     if (!todosVerificados) {
-      alert('⚠️ No se puede aprobar. Todos los items deben estar verificados.')
+      alert('⚠️ No se puede aprobar. Los items obligatorios deben estar verificados.\n\nNota: Las certificaciones son opcionales.')
       return
     }
 
@@ -125,7 +219,6 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('No hay sesión activa')
 
-      // 1. Aprobar coach en la base de datos
       const approveResponse = await fetch('/api/coaches/approve', {
         method: 'POST',
         headers: {
@@ -142,7 +235,6 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
 
       console.log('✅ Coach aprobado en BD')
 
-      // 2. Enviar email de aprobación
       const notifyResponse = await fetch('/api/coaches/notify', {
         method: 'POST',
         headers: {
@@ -158,10 +250,10 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
       if (!notifyResponse.ok) {
         console.warn('⚠️ Coach aprobado pero email falló')
       } else {
-        console.log('✅ Email de aprobación enviado')
+        console.log('✅ Email de bienvenida enviado')
       }
 
-      alert('✅ Coach aprobado exitosamente. Se le ha enviado un email de bienvenida.')
+      alert('✅ Coach aprobado. Se le ha enviado un email de bienvenida.')
       
       if (onSuccess) onSuccess()
 
@@ -175,11 +267,11 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
 
   const handleRechazar = async () => {
     if (!motivoRechazo.trim()) {
-      alert('⚠️ Debes proporcionar un motivo del rechazo')
+      alert('⚠️ Debes especificar el motivo del rechazo')
       return
     }
 
-    if (!confirm('¿Confirmas que quieres RECHAZAR a este coach?\n\nSe le enviará un email con el motivo.')) {
+    if (!confirm('¿Confirmas que quieres RECHAZAR a este coach?\n\nEsta acción no se puede deshacer.')) {
       return
     }
 
@@ -195,7 +287,6 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('No hay sesión activa')
 
-      // 1. Rechazar coach en la base de datos
       const rejectResponse = await fetch('/api/coaches/reject', {
         method: 'POST',
         headers: {
@@ -215,7 +306,6 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
 
       console.log('✅ Coach rechazado en BD')
 
-      // 2. Enviar email de rechazo
       const notifyResponse = await fetch('/api/coaches/notify', {
         method: 'POST',
         headers: {
@@ -270,7 +360,6 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('No hay sesión activa')
 
-      // Enviar email de correcciones
       const notifyResponse = await fetch('/api/coaches/notify', {
         method: 'POST',
         headers: {
@@ -293,6 +382,8 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
       alert('✅ Solicitud de correcciones enviada exitosamente.')
       setShowCorreccionesModal(false)
       setCorrecciones([])
+      
+      if (onSuccess) onSuccess()
 
     } catch (error) {
       console.error('❌ Error enviando correcciones:', error)
@@ -302,95 +393,66 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
     }
   }
 
-  const agregarCorreccion = () => {
-    setCorrecciones([...correcciones, { campo: '', mensaje: '' }])
+  const getIcono = (estado) => {
+    if (estado === true) {
+      return <CheckCircle size={20} style={{ color: '#22c55e' }} />
+    }
+    if (estado === false) {
+      return <XCircle size={20} style={{ color: '#ef4444' }} />
+    }
+    return <Clock size={20} style={{ color: '#eab308' }} />
   }
 
-  const actualizarCorreccion = (index, field, value) => {
-    const nuevas = [...correcciones]
-    nuevas[index][field] = value
-    setCorrecciones(nuevas)
+  const tiposDocumento = {
+    'ine_frente': 'INE - Frente',
+    'ine_reverso': 'INE - Reverso',
+    'comprobante_domicilio': 'Comprobante de Domicilio'
   }
-
-  const eliminarCorreccion = (index) => {
-    setCorrecciones(correcciones.filter((_, i) => i !== index))
-  }
-
-  const getIcono = (verificado) => {
-    return verificado ? (
-      <CheckCircle size={20} style={{ color: '#10b981' }} />
-    ) : (
-      <XCircle size={20} style={{ color: '#ef4444' }} />
-    )
-  }
-
-  const todosVerificados = Object.values(checklist).every(v => v === true)
 
   return (
     <div className="space-y-6">
       {/* Checklist */}
-      <div 
-        className="rounded-lg p-6" 
-        style={{ 
-          background: 'rgba(156, 122, 94, 0.1)',
-          border: '1px solid rgba(156, 122, 94, 0.2)'
-        }}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 
-            className="text-lg font-bold flex items-center gap-2" 
-            style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}
-          >
-            <FileCheck size={20} style={{ color: '#AE3F21' }} />
+      <div className="p-6 rounded-xl space-y-4" style={{ background: 'rgba(174, 63, 33, 0.05)', border: '1px solid rgba(174, 63, 33, 0.2)' }}>
+        <div className="flex items-center gap-3 mb-4">
+          <FileCheck size={24} style={{ color: '#AE3F21' }} />
+          <h3 className="text-xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
             Checklist de Aprobación
           </h3>
-          {todosVerificados ? (
-            <span 
-              className="text-sm px-3 py-1 rounded-full" 
-              style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' }}
-            >
-              ✓ Listo para aprobar
-            </span>
-          ) : (
-            <span 
-              className="text-sm px-3 py-1 rounded-full" 
-              style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}
-            >
-              ⚠ Verificación pendiente
-            </span>
-          )}
         </div>
 
-        <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'rgba(10, 10, 10, 0.5)' }}>
-            <div className="flex items-center gap-3">
-              {getIcono(checklist.perfil_completo)}
-              <div>
-                <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Perfil Completo
-                </p>
-                <p className="text-xs" style={{ color: '#B39A72' }}>
-                  Nombre, bio, experiencia, especialidades
-                </p>
-              </div>
+        {/* Perfil Completo */}
+        <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'rgba(10, 10, 10, 0.5)' }}>
+          <div className="flex items-center gap-3">
+            {getIcono(checklist.perfil_completo)}
+            <div>
+              <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                Perfil Completo
+              </p>
+              <p className="text-xs" style={{ color: '#B39A72' }}>
+                Información personal y profesional completa
+              </p>
             </div>
           </div>
+        </div>
 
-          <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'rgba(10, 10, 10, 0.5)' }}>
-            <div className="flex items-center gap-3">
-              {getIcono(checklist.documentos_completos)}
-              <div>
-                <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Documentos Completos
-                </p>
-                <p className="text-xs" style={{ color: '#B39A72' }}>
-                  INE (frente y reverso), comprobante de domicilio
-                </p>
-              </div>
+        {/* Documentos Completos */}
+        <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'rgba(10, 10, 10, 0.5)' }}>
+          <div className="flex items-center gap-3">
+            {getIcono(checklist.documentos_completos)}
+            <div>
+              <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                Documentos Completos
+              </p>
+              <p className="text-xs" style={{ color: '#B39A72' }}>
+                INE (frente y reverso), comprobante de domicilio
+              </p>
             </div>
           </div>
+        </div>
 
-          <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'rgba(10, 10, 10, 0.5)' }}>
+        {/* Documentos Verificados - CON BOTÓN */}
+        <div className="p-3 rounded-lg" style={{ background: 'rgba(10, 10, 10, 0.5)' }}>
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">
               {getIcono(checklist.documentos_verificados)}
               <div>
@@ -402,60 +464,175 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
                 </p>
               </div>
             </div>
+            <button
+              onClick={() => setMostrarDocumentos(!mostrarDocumentos)}
+              className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+              style={{
+                background: '#AE3F21',
+                color: '#FFFCF3',
+                fontFamily: 'Montserrat, sans-serif'
+              }}
+            >
+              <Eye size={16} />
+              {mostrarDocumentos ? 'Ocultar' : 'Verificar'}
+            </button>
           </div>
 
-          <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'rgba(10, 10, 10, 0.5)' }}>
-            <div className="flex items-center gap-3">
-              {getIcono(checklist.certificaciones_validas)}
-              <div>
-                <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Certificaciones Válidas
+          {/* Panel de Verificación de Documentos */}
+          {mostrarDocumentos && (
+            <div className="mt-4 space-y-3 pl-8">
+              {documentos.length === 0 ? (
+                <p className="text-sm" style={{ color: '#B39A72' }}>
+                  No hay documentos subidos
                 </p>
-                <p className="text-xs" style={{ color: '#B39A72' }}>
-                  Al menos una certificación vigente
-                </p>
-              </div>
+              ) : (
+                documentos.map((doc) => (
+                  <div key={doc.id} className="p-3 rounded-lg flex items-center justify-between" style={{ background: 'rgba(255, 252, 243, 0.05)', border: '1px solid rgba(156, 122, 94, 0.2)' }}>
+                    <div className="flex items-center gap-3">
+                      <FileText size={20} style={{ color: '#B39A72' }} />
+                      <div>
+                        <p className="text-sm font-medium" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                          {tiposDocumento[doc.tipo] || doc.nombre_archivo}
+                        </p>
+                        <p className="text-xs" style={{ color: '#B39A72' }}>
+                          Subido: {new Date(doc.fecha_subida).toLocaleDateString('es-MX')}
+                        </p>
+                      </div>
+                      {doc.verificado && (
+                        <CheckCircle size={16} style={{ color: '#22c55e' }} />
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setVistaPrevia(doc.archivo_url)}
+                        className="p-2 rounded-lg transition-all hover:opacity-80"
+                        style={{ background: 'rgba(156, 122, 94, 0.2)' }}
+                        title="Ver documento"
+                      >
+                        <Eye size={16} style={{ color: '#B39A72' }} />
+                      </button>
+                      
+                      <a
+                        href={doc.archivo_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 rounded-lg transition-all hover:opacity-80"
+                        style={{ background: 'rgba(156, 122, 94, 0.2)' }}
+                        title="Descargar documento"
+                      >
+                        <Download size={16} style={{ color: '#B39A72' }} />
+                      </a>
+                      
+                      <button
+                        onClick={() => verificarDocumento(doc.id, !doc.verificado)}
+                        disabled={procesando === doc.id}
+                        className="px-3 py-1 rounded-lg text-sm font-semibold transition-all hover:opacity-80 disabled:opacity-50"
+                        style={{
+                          background: doc.verificado ? '#ef4444' : '#22c55e',
+                          color: '#FFFCF3',
+                          fontFamily: 'Montserrat, sans-serif'
+                        }}
+                      >
+                        {procesando === doc.id ? '...' : (doc.verificado ? 'Rechazar' : 'Aprobar')}
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Certificaciones - AHORA OPCIONAL */}
+        <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'rgba(10, 10, 10, 0.5)' }}>
+          <div className="flex items-center gap-3">
+            {getIcono(checklist.certificaciones_validas)}
+            <div>
+              <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                Certificaciones Válidas
+                <span className="ml-2 text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(156, 122, 94, 0.2)', color: '#B39A72' }}>
+                  Opcional
+                </span>
+              </p>
+              <p className="text-xs" style={{ color: '#B39A72' }}>
+                {certificaciones.length > 0 
+                  ? `${certificaciones.length} certificación(es) - todas válidas`
+                  : 'Sin certificaciones (puedes aprobar sin ellas)'}
+              </p>
             </div>
           </div>
+        </div>
 
-          <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'rgba(10, 10, 10, 0.5)' }}>
-            <div className="flex items-center gap-3">
-              {getIcono(checklist.info_bancaria_completa)}
-              <div>
-                <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Información Bancaria
-                </p>
-                <p className="text-xs" style={{ color: '#B39A72' }}>
-                  Banco, CLABE y titular completos
-                </p>
-              </div>
+        {/* Info Bancaria */}
+        <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'rgba(10, 10, 10, 0.5)' }}>
+          <div className="flex items-center gap-3">
+            {getIcono(checklist.info_bancaria_completa)}
+            <div>
+              <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                Información Bancaria Completa
+              </p>
+              <p className="text-xs" style={{ color: '#B39A72' }}>
+                Banco, CLABE y titular configurados
+              </p>
             </div>
           </div>
+        </div>
 
-          <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'rgba(10, 10, 10, 0.5)' }}>
-            <div className="flex items-center gap-3">
-              {getIcono(checklist.contrato_firmado)}
-              <div>
-                <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Contrato Firmado
-                </p>
-                <p className="text-xs" style={{ color: '#B39A72' }}>
-                  Contrato vigente con firma digital
-                </p>
-              </div>
+        {/* Contrato */}
+        <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'rgba(10, 10, 10, 0.5)' }}>
+          <div className="flex items-center gap-3">
+            {getIcono(checklist.contrato_firmado)}
+            <div>
+              <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                Contrato Firmado
+              </p>
+              <p className="text-xs" style={{ color: '#B39A72' }}>
+                Contrato digital firmado y vigente
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Botones de Acción */}
+      {/* Botones de acción */}
       <div className="flex gap-3">
         <button
+          onClick={() => setShowCorreccionesModal(true)}
+          disabled={loading}
+          className="flex-1 py-3 px-6 rounded-lg font-semibold transition-all hover:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2"
+          style={{
+            background: 'rgba(234, 179, 8, 0.2)',
+            border: '1px solid #eab308',
+            color: '#eab308',
+            fontFamily: 'Montserrat, sans-serif'
+          }}
+        >
+          <Send size={18} />
+          Solicitar Correcciones
+        </button>
+
+        <button
+          onClick={() => setShowRechazarModal(true)}
+          disabled={loading}
+          className="flex-1 py-3 px-6 rounded-lg font-semibold transition-all hover:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2"
+          style={{
+            background: 'rgba(239, 68, 68, 0.2)',
+            border: '1px solid #ef4444',
+            color: '#ef4444',
+            fontFamily: 'Montserrat, sans-serif'
+          }}
+        >
+          <XCircle size={18} />
+          Rechazar
+        </button>
+
+        <button
           onClick={handleAprobar}
-          disabled={loading || !todosVerificados}
-          className="flex-1 py-3 px-4 rounded-lg font-semibold transition-all hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          style={{ 
-            background: '#10b981',
+          disabled={loading}
+          className="flex-1 py-3 px-6 rounded-lg font-semibold transition-all hover:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2"
+          style={{
+            background: '#22c55e',
             color: '#FFFCF3',
             fontFamily: 'Montserrat, sans-serif'
           }}
@@ -472,37 +649,9 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
             </>
           )}
         </button>
-
-        <button
-          onClick={() => setShowCorreccionesModal(true)}
-          disabled={loading}
-          className="px-4 py-3 rounded-lg font-semibold transition-all hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
-          style={{ 
-            background: 'rgba(174, 63, 33, 0.2)',
-            color: '#AE3F21',
-            fontFamily: 'Montserrat, sans-serif'
-          }}
-        >
-          <Send size={18} />
-          Solicitar Correcciones
-        </button>
-
-        <button
-          onClick={() => setShowRechazarModal(true)}
-          disabled={loading}
-          className="px-4 py-3 rounded-lg font-semibold transition-all hover:opacity-80 disabled:opacity-50 flex items-center gap-2"
-          style={{ 
-            background: 'rgba(239, 68, 68, 0.2)',
-            color: '#ef4444',
-            fontFamily: 'Montserrat, sans-serif'
-          }}
-        >
-          <XCircle size={18} />
-          Rechazar
-        </button>
       </div>
 
-      {/* Modal de Rechazo */}
+      {/* Modal Rechazar */}
       {showRechazarModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowRechazarModal(false)}>
           <div 
@@ -511,14 +660,14 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2 mb-4">
-              <AlertCircle size={24} style={{ color: '#ef4444' }} />
+              <XCircle size={24} style={{ color: '#ef4444' }} />
               <h3 className="text-xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                Rechazar Coach
+                Rechazar Solicitud
               </h3>
             </div>
 
             <p className="text-sm mb-4" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-              Proporciona un motivo claro para el rechazo. Se enviará por email al coach.
+              Especifica el motivo del rechazo. Se enviará por email al coach.
             </p>
 
             <textarea
@@ -564,7 +713,7 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
         </div>
       )}
 
-      {/* Modal de Correcciones */}
+      {/* Modal Correcciones */}
       {showCorreccionesModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto" onClick={() => setShowCorreccionesModal(false)}>
           <div 
@@ -583,63 +732,83 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
               Especifica qué debe corregir el coach. Se le enviará un email con los detalles.
             </p>
 
-            <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
+            {/* Lista de correcciones */}
+            <div className="space-y-3 mb-4">
               {correcciones.map((corr, index) => (
-                <div key={index} className="p-3 rounded-lg" style={{ background: 'rgba(174, 63, 33, 0.1)' }}>
-                  <input
-                    type="text"
-                    value={corr.campo}
-                    onChange={(e) => actualizarCorreccion(index, 'campo', e.target.value)}
-                    placeholder="Campo (ej: Certificación, INE, etc.)"
-                    className="w-full p-2 rounded mb-2"
-                    style={{
-                      background: 'rgba(255, 252, 243, 0.05)',
-                      border: '1px solid rgba(156, 122, 94, 0.2)',
-                      color: '#FFFCF3',
-                      fontFamily: 'Montserrat, sans-serif',
-                      fontSize: '14px'
-                    }}
-                  />
-                  <textarea
-                    value={corr.mensaje}
-                    onChange={(e) => actualizarCorreccion(index, 'mensaje', e.target.value)}
-                    placeholder="Descripción de la corrección necesaria..."
-                    rows={2}
-                    className="w-full p-2 rounded mb-2"
-                    style={{
-                      background: 'rgba(255, 252, 243, 0.05)',
-                      border: '1px solid rgba(156, 122, 94, 0.2)',
-                      color: '#FFFCF3',
-                      fontFamily: 'Montserrat, sans-serif',
-                      fontSize: '14px'
-                    }}
-                  />
+                <div key={index} className="p-3 rounded-lg flex items-start justify-between" style={{ background: 'rgba(255, 252, 243, 0.05)', border: '1px solid rgba(156, 122, 94, 0.2)' }}>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                      {corr.campo}
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                      {corr.mensaje}
+                    </p>
+                  </div>
                   <button
-                    onClick={() => eliminarCorreccion(index)}
-                    className="text-sm px-3 py-1 rounded transition-all hover:opacity-80"
+                    onClick={() => setCorrecciones(correcciones.filter((_, i) => i !== index))}
+                    className="ml-2 p-1 rounded hover:opacity-70"
                     style={{ color: '#ef4444' }}
                   >
-                    Eliminar
+                    <XCircle size={18} />
                   </button>
                 </div>
               ))}
             </div>
 
-            <button
-              onClick={agregarCorreccion}
-              className="w-full py-2 px-4 rounded-lg font-semibold transition-all hover:opacity-80 mb-4"
-              style={{
-                background: 'rgba(174, 63, 33, 0.2)',
-                color: '#AE3F21',
-                fontFamily: 'Montserrat, sans-serif'
-              }}
-            >
-              + Agregar Corrección
-            </button>
+            {/* Formulario para agregar corrección */}
+            <div className="space-y-3 mb-4">
+              <input
+                type="text"
+                id="campo"
+                placeholder="Campo a corregir (ej: Foto de perfil)"
+                className="w-full p-3 rounded-lg"
+                style={{
+                  background: 'rgba(255, 252, 243, 0.05)',
+                  border: '1px solid rgba(156, 122, 94, 0.2)',
+                  color: '#FFFCF3',
+                  fontFamily: 'Montserrat, sans-serif'
+                }}
+              />
+              <textarea
+                id="mensaje"
+                placeholder="Descripción de la corrección necesaria"
+                rows={2}
+                className="w-full p-3 rounded-lg"
+                style={{
+                  background: 'rgba(255, 252, 243, 0.05)',
+                  border: '1px solid rgba(156, 122, 94, 0.2)',
+                  color: '#FFFCF3',
+                  fontFamily: 'Montserrat, sans-serif'
+                }}
+              />
+              <button
+                onClick={() => {
+                  const campo = document.getElementById('campo').value
+                  const mensaje = document.getElementById('mensaje').value
+                  if (campo.trim() && mensaje.trim()) {
+                    setCorrecciones([...correcciones, { campo, mensaje }])
+                    document.getElementById('campo').value = ''
+                    document.getElementById('mensaje').value = ''
+                  }
+                }}
+                className="w-full py-2 px-4 rounded-lg font-semibold transition-all hover:opacity-80"
+                style={{
+                  background: 'rgba(174, 63, 33, 0.2)',
+                  border: '1px solid #AE3F21',
+                  color: '#AE3F21',
+                  fontFamily: 'Montserrat, sans-serif'
+                }}
+              >
+                + Agregar Corrección
+              </button>
+            </div>
 
             <div className="flex gap-3">
               <button
-                onClick={() => setShowCorreccionesModal(false)}
+                onClick={() => {
+                  setShowCorreccionesModal(false)
+                  setCorrecciones([])
+                }}
                 className="flex-1 py-2 px-4 rounded-lg font-semibold transition-all hover:opacity-80"
                 style={{
                   background: 'rgba(156, 122, 94, 0.2)',
@@ -661,6 +830,40 @@ export default function ChecklistAprobacion({ coach, onSuccess }) {
               >
                 {loading ? 'Enviando...' : 'Enviar Correcciones'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Vista Previa Documento */}
+      {vistaPrevia && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" onClick={() => setVistaPrevia(null)}>
+          <div className="max-w-4xl w-full max-h-[90vh] overflow-auto bg-white rounded-lg">
+            <div className="p-4 flex justify-between items-center border-b">
+              <h3 className="text-lg font-bold">Vista Previa del Documento</h3>
+              <button
+                onClick={() => setVistaPrevia(null)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
+            <div className="p-4">
+              {vistaPrevia.endsWith('.pdf') ? (
+                <iframe
+                  src={vistaPrevia}
+                  className="w-full h-[70vh]"
+                  title="Vista previa PDF"
+                />
+              ) : (
+                <Image
+                  src={vistaPrevia}
+                  alt="Documento"
+                  width={800}
+                  height={600}
+                  className="w-full h-auto"
+                />
+              )}
             </div>
           </div>
         </div>
