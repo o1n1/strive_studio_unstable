@@ -1,6 +1,6 @@
 'use client'
 
-import { Shield, Building2, Bike, Users, Calendar, Package, Settings, UserCog } from 'lucide-react'
+import { Shield, Building2, Bike, Users, Calendar, Package, Settings, UserCog, FileText } from 'lucide-react'
 import Link from 'next/link'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
@@ -31,6 +31,13 @@ export default function AdminDashboardPage() {
       descripcion: 'Administra coaches e invitaciones',
       icono: UserCog,
       href: '/admin/coaches',
+      disponible: true
+    },
+    {
+      titulo: 'Plantillas de Contratos',
+      descripcion: 'Edita y gestiona plantillas de contratos',
+      icono: FileText,
+      href: '/admin/plantillas-contratos',
       disponible: true
     },
     {
@@ -74,79 +81,136 @@ export default function AdminDashboardPage() {
     <DashboardLayout>
       <div className="space-y-6 md:space-y-8">
         {/* Header */}
+        <div>
+          <h1 
+            className="text-3xl md:text-4xl font-bold mb-2" 
+            style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}
+          >
+            Panel de Administración
+          </h1>
+          <p 
+            className="text-base md:text-lg" 
+            style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}
+          >
+            Selecciona un módulo para comenzar
+          </p>
+        </div>
+
+        {/* Módulos Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          {modulos.map((modulo) => {
+            const Icono = modulo.icono
+            return (
+              <Link 
+                key={modulo.titulo} 
+                href={modulo.disponible ? modulo.href : '#'}
+                className={modulo.disponible ? '' : 'pointer-events-none'}
+              >
+                <Card className={`h-full transition-all duration-300 ${
+                  modulo.disponible 
+                    ? 'hover:scale-105 hover:shadow-2xl cursor-pointer' 
+                    : 'opacity-50'
+                }`}>
+                  <div className="flex flex-col h-full">
+                    <div className="flex items-start justify-between mb-4">
+                      <div 
+                        className="p-3 rounded-xl"
+                        style={{ 
+                          background: modulo.disponible 
+                            ? 'rgba(174, 63, 33, 0.2)' 
+                            : 'rgba(156, 122, 94, 0.2)' 
+                        }}
+                      >
+                        <Icono 
+                          size={28} 
+                          style={{ 
+                            color: modulo.disponible ? '#AE3F21' : '#9C7A5E' 
+                          }} 
+                        />
+                      </div>
+                      {!modulo.disponible && (
+                        <span 
+                          className="text-xs px-3 py-1 rounded-full font-semibold"
+                          style={{ 
+                            background: 'rgba(156, 122, 94, 0.2)', 
+                            color: '#9C7A5E' 
+                          }}
+                        >
+                          Próximamente
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 
+                      className="text-xl font-bold mb-2" 
+                      style={{ 
+                        color: '#FFFCF3', 
+                        fontFamily: 'Montserrat, sans-serif' 
+                      }}
+                    >
+                      {modulo.titulo}
+                    </h3>
+
+                    <p 
+                      className="text-sm flex-1" 
+                      style={{ 
+                        color: '#B39A72', 
+                        fontFamily: 'Montserrat, sans-serif' 
+                      }}
+                    >
+                      {modulo.descripcion}
+                    </p>
+
+                    {modulo.disponible && (
+                      <div className="mt-4 pt-4 border-t" style={{ borderColor: 'rgba(156, 122, 94, 0.2)' }}>
+                        <span 
+                          className="text-sm font-semibold flex items-center gap-2"
+                          style={{ color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}
+                        >
+                          Acceder
+                          <svg 
+                            className="w-4 h-4 transition-transform group-hover:translate-x-1" 
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
+                          >
+                            <path 
+                              strokeLinecap="round" 
+                              strokeLinejoin="round" 
+                              strokeWidth={2} 
+                              d="M9 5l7 7-7 7" 
+                            />
+                          </svg>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              </Link>
+            )
+          })}
+        </div>
+
+        {/* Footer Info */}
         <Card>
-          <div className="text-center space-y-3 sm:space-y-4">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full flex items-center justify-center"
-              style={{ background: 'rgba(174, 63, 33, 0.2)' }}>
-              <Shield size={28} className="sm:w-8 sm:h-8" style={{ color: '#AE3F21' }} />
-            </div>
+          <div className="flex items-center gap-3">
+            <Shield size={24} style={{ color: '#AE3F21' }} />
             <div>
-              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                Panel de Administración
-              </h2>
-              <p className="text-xs sm:text-sm opacity-70 mt-1" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                Gestiona todos los aspectos de tu estudio
+              <p 
+                className="font-semibold mb-1" 
+                style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}
+              >
+                Acceso Administrativo
+              </p>
+              <p 
+                className="text-sm" 
+                style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}
+              >
+                Tienes permisos completos para gestionar todos los módulos del sistema
               </p>
             </div>
           </div>
         </Card>
-
-        {/* Grid de Módulos */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-5 justify-items-center">
-          {modulos.map((modulo, index) => {
-            const Icono = modulo.icono
-            
-            if (modulo.disponible) {
-              return (
-                <Link key={index} href={modulo.href} className="w-full max-w-sm">
-                  <Card className="h-full">
-                    <div className="space-y-3 sm:space-y-4 transition-all hover:opacity-80 cursor-pointer">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center"
-                        style={{ background: 'rgba(174, 63, 33, 0.2)' }}>
-                        <Icono size={20} className="sm:w-6 sm:h-6" style={{ color: '#AE3F21' }} />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-base sm:text-lg mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                          {modulo.titulo}
-                        </h3>
-                        <p className="text-xs sm:text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                          {modulo.descripcion}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                </Link>
-              )
-            } else {
-              return (
-                <Card key={index} className="h-full w-full max-w-sm">
-                  <div className="space-y-3 sm:space-y-4 opacity-50 cursor-not-allowed">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center"
-                      style={{ background: 'rgba(156, 122, 94, 0.2)' }}>
-                      <Icono size={20} className="sm:w-6 sm:h-6" style={{ color: '#9C7A5E' }} />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-base sm:text-lg mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                        {modulo.titulo}
-                      </h3>
-                      <p className="text-xs sm:text-sm opacity-70" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                        {modulo.descripcion}
-                      </p>
-                      <span className="inline-block mt-2 text-xs px-2 py-1 rounded-full" 
-                        style={{ 
-                          background: 'rgba(156, 122, 94, 0.2)', 
-                          color: '#9C7A5E',
-                          fontFamily: 'Montserrat, sans-serif'
-                        }}>
-                        Próximamente
-                      </span>
-                    </div>
-                  </div>
-                </Card>
-              )
-            }
-          })}
-        </div>
       </div>
     </DashboardLayout>
   )
