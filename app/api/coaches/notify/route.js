@@ -377,17 +377,15 @@ Equipo de ${STUDIO_NAME}
 }
 
 function generarEmailCorrecciones(coach, correcciones, admin) {
-  const perfilUrl = `${STUDIO_URL}/coach/perfil`
-
+  // ✅ CORRECCIÓN: Link correcto a la página de edición de perfil
+  const perfilUrl = `${STUDIO_URL}/coach/editar-perfil`
+  
   const correccionesHTML = correcciones.map(corr => 
-    `<li style="margin-bottom: 10px;">
-      <strong style="color: #FFFCF3;">${corr.campo}:</strong> 
-      <span style="color: #B39A72;">${corr.mensaje}</span>
-    </li>`
+    `<li><strong>${corr.campo}:</strong> ${corr.mensaje}</li>`
   ).join('')
 
   const correccionesText = correcciones.map(corr => 
-    `- ${corr.campo}: ${corr.mensaje}`
+    `• ${corr.campo}: ${corr.mensaje}`
   ).join('\n')
 
   const html = `
@@ -396,15 +394,96 @@ function generarEmailCorrecciones(coach, correcciones, admin) {
 <head>
   <meta charset="utf-8">
   <style>
-    body { font-family: 'Arial', sans-serif; background-color: #0A0A0A; color: #FFFCF3; margin: 0; padding: 0; }
-    .container { max-width: 600px; margin: 0 auto; background-color: #0A0A0A; }
-    .header { background: linear-gradient(135deg, #AE3F21 0%, #9C7A5E 100%); padding: 40px 20px; text-align: center; }
-    .header h1 { color: #FFFCF3; margin: 0; font-size: 28px; }
-    .content { padding: 40px 30px; background-color: #0A0A0A; }
-    .warning-box { background-color: rgba(174, 63, 33, 0.1); border-left: 4px solid #AE3F21; padding: 20px; margin: 20px 0; border-radius: 8px; }
-    .button { display: inline-block; background-color: #AE3F21; color: #FFFCF3; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
-    .corrections-list { background-color: rgba(156, 122, 94, 0.1); padding: 20px; border-radius: 8px; margin: 15px 0; }
-    .footer { text-align: center; padding: 30px; color: #B39A72; font-size: 12px; }
+    body { 
+      font-family: 'Arial', sans-serif; 
+      background-color: #0A0A0A; 
+      color: #FFFCF3; 
+      margin: 0; 
+      padding: 0; 
+    }
+    .container { 
+      max-width: 600px; 
+      margin: 0 auto; 
+      background-color: #0A0A0A; 
+    }
+    .header { 
+      background: linear-gradient(135deg, #AE3F21 0%, #9C7A5E 100%); 
+      padding: 40px 20px; 
+      text-align: center; 
+    }
+    .header h1 { 
+      color: #FFFCF3; 
+      margin: 0; 
+      font-size: 28px; 
+    }
+    .content { 
+      padding: 40px 30px; 
+      background-color: #0A0A0A; 
+    }
+    .content h2 {
+      color: #FFFCF3;
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+    .content p {
+      color: #B39A72;
+      line-height: 1.6;
+      margin: 15px 0;
+    }
+    .warning-box { 
+      background-color: rgba(239, 68, 68, 0.1); 
+      border: 1px solid rgba(239, 68, 68, 0.3); 
+      padding: 20px; 
+      margin: 20px 0; 
+      border-radius: 8px; 
+    }
+    .warning-box p {
+      color: #FFFCF3;
+      margin: 0;
+      font-size: 16px;
+    }
+    .button { 
+      display: inline-block; 
+      background-color: #AE3F21; 
+      color: #FFFCF3; 
+      padding: 15px 40px; 
+      text-decoration: none; 
+      border-radius: 8px; 
+      font-weight: bold; 
+      margin: 20px 0; 
+    }
+    .corrections-list { 
+      background-color: rgba(156, 122, 94, 0.1); 
+      border: 1px solid rgba(156, 122, 94, 0.3); 
+      padding: 20px; 
+      border-radius: 8px; 
+      margin: 20px 0; 
+    }
+    .corrections-list h3 {
+      color: #FFFCF3;
+      margin-top: 0;
+      margin-bottom: 15px;
+    }
+    .corrections-list ul {
+      color: #B39A72;
+      line-height: 1.8;
+      margin: 0;
+      padding-left: 20px;
+    }
+    .corrections-list li {
+      margin-bottom: 10px;
+    }
+    .footer { 
+      text-align: center; 
+      padding: 30px; 
+      color: #B39A72; 
+      font-size: 12px; 
+      border-top: 1px solid rgba(156, 122, 94, 0.2);
+    }
+    .footer p {
+      margin: 5px 0;
+      color: #B39A72;
+    }
   </style>
 </head>
 <body>
@@ -414,11 +493,11 @@ function generarEmailCorrecciones(coach, correcciones, admin) {
     </div>
     
     <div class="content">
-      <h2 style="color: #FFFCF3;">Hola ${coach.nombre} ${coach.apellidos},</h2>
+      <h2>Hola ${coach.nombre} ${coach.apellidos},</h2>
       
       <p style="color: #B39A72; line-height: 1.6;">
         Hemos revisado tu solicitud para unirte a <strong style="color: #FFFCF3;">${STUDIO_NAME}</strong> 
-        y necesitamos que realices algunas correcciones antes de poder aprobar tu perfil.
+        y necesitamos que realices algunas correcciones antes de poder continuar con el proceso de aprobación.
       </p>
 
       <div class="warning-box">
@@ -428,8 +507,8 @@ function generarEmailCorrecciones(coach, correcciones, admin) {
       </div>
 
       <div class="corrections-list">
-        <h3 style="color: #FFFCF3; margin-top: 0;">📋 Correcciones Requeridas:</h3>
-        <ul style="color: #B39A72; line-height: 1.8;">
+        <h3>📋 Correcciones Requeridas:</h3>
+        <ul>
           ${correccionesHTML}
         </ul>
       </div>
@@ -452,6 +531,10 @@ function generarEmailCorrecciones(coach, correcciones, admin) {
     <div class="footer">
       <p>${STUDIO_NAME} © ${new Date().getFullYear()}</p>
       <p>Este es un email automático, por favor no responder.</p>
+      <p style="margin-top: 15px; font-size: 11px;">
+        Si el botón no funciona, copia y pega este link en tu navegador:<br>
+        <span style="color: #AE3F21;">${perfilUrl}</span>
+      </p>
     </div>
   </div>
 </body>
@@ -463,7 +546,7 @@ Correcciones Necesarias en tu Solicitud
 
 Hola ${coach.nombre} ${coach.apellidos},
 
-Necesitamos que realices algunas correcciones en tu solicitud para ${STUDIO_NAME}:
+Hemos revisado tu solicitud para unirte a ${STUDIO_NAME} y necesitamos que realices algunas correcciones antes de poder continuar con el proceso de aprobación.
 
 Correcciones Requeridas:
 ${correccionesText}
@@ -473,8 +556,14 @@ ${perfilUrl}
 
 Una vez completadas, revisaremos nuevamente tu solicitud.
 
+Si tienes alguna pregunta, no dudes en contactarnos.
+
 ${admin.nombre} ${admin.apellidos}
 Equipo de ${STUDIO_NAME}
+
+---
+${STUDIO_NAME}
+© ${new Date().getFullYear()}
   `
 
   return {
