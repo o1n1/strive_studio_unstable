@@ -1,51 +1,21 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { FileText, PenTool, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
-
-const CONTRATO_TEXTO = `
-CONTRATO DE PRESTACIÓN DE SERVICIOS COMO INSTRUCTOR/COACH
-
-Entre STRIVE STUDIO y el INSTRUCTOR/COACH, se celebra el presente contrato bajo los siguientes términos:
-
-I. OBJETO DEL CONTRATO
-El INSTRUCTOR/COACH prestará servicios de instrucción de clases de fitness (cycling, funcional u otros) según la especialidad y categoría asignada.
-
-II. OBLIGACIONES DEL INSTRUCTOR/COACH
-1. Impartir las clases asignadas con puntualidad y profesionalismo
-2. Mantener certificaciones vigentes requeridas por el estudio
-3. Seguir los estándares de calidad y protocolos del estudio
-4. Tratar a los clientes con respeto y profesionalismo
-5. Usar el equipo e instalaciones de manera adecuada
-6. Informar con anticipación sobre cualquier ausencia o cambio de horario
-7. Mantener confidencialidad sobre información del estudio y clientes
-
-III. OBLIGACIONES DE STRIVE STUDIO
-1. Proporcionar instalaciones y equipo adecuado
-2. Realizar pagos según el esquema acordado
-3. Brindar soporte administrativo
-4. Mantener un ambiente de trabajo seguro
-
-IV. COMPENSACIÓN
-El pago se realizará según el esquema establecido (por clase, hora o mensual) acordado con la administración.
-
-V. TERMINACIÓN
-Cualquiera de las partes puede terminar este contrato con 15 días de anticipación mediante aviso por escrito.
-
-VI. CONFIDENCIALIDAD
-El INSTRUCTOR/COACH se compromete a mantener confidencialidad sobre información sensible del negocio, clientes y operaciones del estudio.
-
-VII. ACEPTACIÓN
-Al firmar este contrato, el INSTRUCTOR/COACH acepta haber leído, comprendido y estar de acuerdo con todos los términos establecidos.
-`
+import { useState, useEffect, useRef } from 'react'
+import { FileText, PenTool, CheckCircle, AlertCircle } from 'lucide-react'
 
 export default function Step8FirmaContrato({ data, updateData, prevStep, invitacion, token }) {
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
+  const [loadingPlantilla, setLoadingPlantilla] = useState(true)
   const [isSigning, setIsSigning] = useState(false)
+  const [contratoTexto, setContratoTexto] = useState('')
   const canvasRef = useRef(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [hasSignature, setHasSignature] = useState(false)
+
+  useEffect(() => {
+    cargarPlantillaContrato()
+  }, [])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -67,6 +37,102 @@ export default function Step8FirmaContrato({ data, updateData, prevStep, invitac
       img.src = data.firma_digital
     }
   }, [])
+
+  const cargarPlantillaContrato = async () => {
+    setLoadingPlantilla(true)
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      )
+
+      // Obtener plantilla por defecto para "por_clase"
+      const { data: plantilla, error } = await supabase
+        .from('contract_templates')
+        .select('contenido')
+        .eq('tipo_contrato', 'por_clase')
+        .eq('es_default', true)
+        .eq('vigente', true)
+        .single()
+
+      if (error || !plantilla) {
+        console.error('Error cargando plantilla:', error)
+        // Fallback: usar texto básico si no hay plantilla
+        setContratoTexto(getContratoFallback())
+      } else {
+        // Reemplazar variables en la plantilla
+        const textoPersonalizado = reemplazarVariables(plantilla.contenido)
+        setContratoTexto(textoPersonalizado)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      setContratoTexto(getContratoFallback())
+    } finally {
+      setLoadingPlantilla(false)
+    }
+  }
+
+  const reemplazarVariables = (plantilla) => {
+    const nombreCompleto = `${data.nombre || ''} ${data.apellidos || ''}`.trim() || '[Nombre del Coach]'
+    const fechaInicio = new Date().toLocaleDateString('es-MX', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    })
+    const fechaFirma = new Date().toLocaleDateString('es-MX', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    })
+    const categoria = invitacion?.categoria || 'No especificada'
+
+    return plantilla
+      .replace(/\{\{nombre_completo\}\}/g, nombreCompleto)
+      .replace(/\{\{fecha_inicio\}\}/g, fechaInicio)
+      .replace(/\{\{fecha_firma\}\}/g, fechaFirma)
+      .replace(/\{\{categoria\}\}/g, categoria)
+  }
+
+  const getContratoFallback = () => {
+    const nombreCompleto = `${data.nombre || ''} ${data.apellidos || ''}`.trim() || '[Nombre del Coach]'
+    const fechaInicio = new Date().toLocaleDateString('es-MX')
+    const categoria = invitacion?.categoria || 'No especificada'
+
+    return `CONTRATO DE PRESTACIÓN DE SERVICIOS PROFESIONALES
+
+Entre STRIVE STUDIO (en adelante "EL ESTUDIO") y ${nombreCompleto} (en adelante "EL INSTRUCTOR/COACH"), se celebra el presente contrato bajo los siguientes términos:
+
+I. OBJETO DEL CONTRATO
+EL INSTRUCTOR/COACH prestará servicios profesionales de coaching deportivo en las instalaciones de EL ESTUDIO, impartiendo clases de ${categoria} según el horario acordado.
+
+II. OBLIGACIONES DEL INSTRUCTOR/COACH
+1. Impartir clases con profesionalismo, puntualidad y calidad excepcional.
+2. Mantener vigentes todas las certificaciones profesionales requeridas.
+3. Cumplir con los protocolos de seguridad e higiene del estudio.
+4. Respetar la confidencialidad de información sensible de clientes y operaciones.
+
+III. OBLIGACIONES DEL ESTUDIO
+1. Proporcionar instalaciones adecuadas y equipamiento necesario.
+2. Realizar pagos según lo acordado en tiempo y forma.
+3. Cubrir seguros de responsabilidad civil durante las clases.
+
+IV. COMPENSACIÓN
+El pago se realizará según el esquema establecido (por clase, hora o mensual) acordado con la administración.
+
+V. TERMINACIÓN
+Cualquiera de las partes puede terminar este contrato con 15 días de anticipación mediante aviso por escrito.
+
+VI. CONFIDENCIALIDAD
+EL INSTRUCTOR/COACH se compromete a mantener confidencialidad sobre información sensible del negocio, clientes y operaciones del estudio.
+
+VII. ACEPTACIÓN
+Al firmar este contrato, EL INSTRUCTOR/COACH acepta haber leído, comprendido y estar de acuerdo con todos los términos establecidos.
+
+Fecha de inicio: ${fechaInicio}
+Categoría: ${categoria}
+Tipo de compensación: Por Clase`
+  }
 
   const getCoordinates = (e, canvas) => {
     const rect = canvas.getBoundingClientRect()
@@ -214,13 +280,28 @@ export default function Step8FirmaContrato({ data, updateData, prevStep, invitac
           </h3>
         </div>
 
-        <div
-          className="p-6 rounded-xl h-96 overflow-y-auto"
-          style={{ background: 'rgba(42, 42, 42, 0.8)', border: '1px solid rgba(156, 122, 94, 0.3)' }}>
-          <pre className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-            {CONTRATO_TEXTO}
-          </pre>
-        </div>
+        {loadingPlantilla ? (
+          <div 
+            className="p-6 rounded-xl h-96 flex items-center justify-center"
+            style={{ background: 'rgba(42, 42, 42, 0.8)', border: '1px solid rgba(156, 122, 94, 0.3)' }}
+          >
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4" style={{ borderColor: '#AE3F21' }}></div>
+              <p style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Cargando contrato...
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="p-6 rounded-xl h-96 overflow-y-auto"
+            style={{ background: 'rgba(42, 42, 42, 0.8)', border: '1px solid rgba(156, 122, 94, 0.3)' }}
+          >
+            <pre className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              {contratoTexto}
+            </pre>
+          </div>
+        )}
       </div>
 
       {/* Checkbox Aceptar */}
@@ -339,36 +420,49 @@ export default function Step8FirmaContrato({ data, updateData, prevStep, invitac
 
       {/* Error de submit */}
       {errors.submit && (
-        <div className="p-4 rounded-xl" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444' }}>
-          <p className="text-sm" style={{ color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
-            {errors.submit}
-          </p>
+        <div className="p-4 rounded-xl" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+          <div className="flex items-center gap-2">
+            <AlertCircle size={20} style={{ color: '#ef4444' }} />
+            <p className="text-sm" style={{ color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}>
+              {errors.submit}
+            </p>
+          </div>
         </div>
       )}
 
-      {/* Botones */}
-      <div className="flex justify-between pt-4">
+      {/* Botones de navegación */}
+      <div className="flex gap-4">
         <button
           type="button"
           onClick={prevStep}
           disabled={loading}
-          className="px-8 py-3 rounded-xl font-bold text-lg transition-all hover:opacity-90 disabled:opacity-50"
-          style={{ background: '#B39A72', color: '#1a1a1a', fontFamily: 'Montserrat, sans-serif' }}>
-          ← Anterior
+          className="flex-1 py-3 px-6 rounded-lg font-semibold transition-all hover:opacity-80 disabled:opacity-50"
+          style={{ 
+            background: 'rgba(156, 122, 94, 0.2)', 
+            color: '#B39A72',
+            fontFamily: 'Montserrat, sans-serif'
+          }}
+        >
+          Anterior
         </button>
-
+        
         <button
           type="submit"
-          disabled={loading}
-          className="px-8 py-3 rounded-xl font-bold text-lg transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+          disabled={loading || loadingPlantilla}
+          className="flex-1 py-3 px-6 rounded-lg font-semibold transition-all hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ 
+            background: '#AE3F21',
+            color: '#FFFCF3',
+            fontFamily: 'Montserrat, sans-serif'
+          }}
+        >
           {loading ? (
-            <>
-              <Loader2 size={20} className="animate-spin" />
-              Enviando Solicitud...
-            </>
+            <span className="flex items-center justify-center gap-2">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              Enviando...
+            </span>
           ) : (
-            'Enviar Solicitud ✓'
+            'Enviar Solicitud'
           )}
         </button>
       </div>
