@@ -4,17 +4,17 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { 
   ArrowLeft, User, Mail, Phone, Calendar, MapPin, 
-  FileText, DollarSign, Edit, Award, Instagram, 
-  Facebook, Share2, Building, CreditCard, Download, 
-  ExternalLink, FileCheck, Edit2
+  FileText, DollarSign, CheckCircle, XCircle, Edit,
+  Award, Instagram, Facebook, Share2, Building, CreditCard,
+  Download, ExternalLink, FileCheck, Clock, AlertCircle
 } from 'lucide-react'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
+import DocumentosCoachVerificacion from '@/components/admin/DocumentosCoachVerificacion'
+import ChecklistAprobacion from '@/components/admin/ChecklistAprobacion'
 import { supabase } from '@/lib/supabase/client'
 import { useProtectedRoute } from '@/hooks/useProtectedRoute'
 import DashboardSkeleton from '@/components/skeletons/DashboardSkeleton'
-import EditarContratoModal from '@/components/admin/EditarContratoModal'
-import ChecklistAprobacion from '@/components/admin/ChecklistAprobacion'
 
 export default function CoachDetailPage() {
   const params = useParams()
@@ -25,93 +25,95 @@ export default function CoachDetailPage() {
   const [certificaciones, setCertificaciones] = useState([])
   const [documentos, setDocumentos] = useState([])
   const [contratos, setContratos] = useState([])
-  const [pagos, setPagos] = useState([])
-  const [evaluaciones, setEvaluaciones] = useState([])
-  const [incidencias, setIncidencias] = useState([])
-  const [ausencias, setAusencias] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [downloadingPDF, setDownloadingPDF] = useState(false)
-  const [showEditarContratoModal, setShowEditarContratoModal] = useState(false)
+  const [mostrarChecklist, setMostrarChecklist] = useState(false)
 
   useEffect(() => {
-    if (isAuthorized && params.id) {
+    if (params.id) {
       cargarTodosLosDatos()
     }
-  }, [isAuthorized, params.id])
+  }, [params.id])
 
   const cargarTodosLosDatos = async () => {
     try {
       setLoading(true)
       setError(null)
 
+      console.log('📥 Cargando datos del coach:', params.id)
+
+      // Obtener datos del coach con información del perfil
       const { data: coachData, error: coachError } = await supabase
-        .from('coaches_complete')
-        .select('*')
+        .from('coaches')
+        .select(`
+          *,
+          profile:profiles!coaches_id_fkey(
+            id, email, nombre, apellidos, telefono, avatar_url, rol
+          )
+        `)
         .eq('id', params.id)
         .single()
-      
-      if (coachError) throw coachError
-      setCoach(coachData)
 
-      const { data: certData } = await supabase
+      if (coachError) throw coachError
+      
+      // Combinar datos del coach con el perfil
+      const coachCompleto = {
+        ...coachData,
+        nombre: coachData.profile?.nombre || '',
+        apellidos: coachData.profile?.apellidos || '',
+        email: coachData.profile?.email || '',
+        telefono: coachData.profile?.telefono || coachData.telefono || '',
+        avatar_url: coachData.profile?.avatar_url || null
+      }
+
+      setCoach(coachCompleto)
+      console.log('✅ Datos del coach cargados:', coachCompleto)
+
+      // Obtener certificaciones
+      const { data: certs, error: certsError } = await supabase
         .from('coach_certifications')
         .select('*')
         .eq('coach_id', params.id)
         .order('fecha_obtencion', { ascending: false })
-      setCertificaciones(certData || [])
 
-      const { data: docsData } = await supabase
+      if (certsError) throw certsError
+      setCertificaciones(certs || [])
+      console.log('✅ Certificaciones cargadas:', certs?.length || 0)
+
+      // Obtener documentos
+      const { data: docs, error: docsError } = await supabase
         .from('coach_documents')
         .select('*')
         .eq('coach_id', params.id)
         .order('fecha_subida', { ascending: false })
-      setDocumentos(docsData || [])
 
-      const { data: contractsData } = await supabase
+      if (docsError) throw docsError
+      setDocumentos(docs || [])
+      console.log('✅ Documentos cargados:', docs?.length || 0)
+
+      // Obtener contratos
+      const { data: contracts, error: contractsError } = await supabase
         .from('coach_contracts')
         .select('*')
         .eq('coach_id', params.id)
         .order('created_at', { ascending: false })
-      setContratos(contractsData || [])
 
-      const { data: paymentsData } = await supabase
-        .from('coach_payments')
-        .select('*')
-        .eq('coach_id', params.id)
-        .order('periodo_inicio', { ascending: false })
-      setPagos(paymentsData || [])
-
-      const { data: evals } = await supabase
-        .from('coach_evaluations')
-        .select(`
-          *,
-          evaluador:profiles!evaluado_por(nombre, apellidos)
-        `)
-        .eq('coach_id', params.id)
-        .order('fecha_evaluacion', { ascending: false })
-      setEvaluaciones(evals || [])
-
-      const { data: incidents } = await supabase
-        .from('coach_incidents')
-        .select('*')
-        .eq('coach_id', params.id)
-        .order('fecha_incidente', { ascending: false })
-      setIncidencias(incidents || [])
-
-      const { data: absences } = await supabase
-        .from('coach_absences')
-        .select('*')
-        .eq('coach_id', params.id)
-        .order('fecha_inicio', { ascending: false })
-      setAusencias(absences || [])
+      if (contractsError) throw contractsError
+      setContratos(contracts || [])
+      console.log('✅ Contratos cargados:', contracts?.length || 0)
 
       setLoading(false)
     } catch (error) {
-      console.error('❌ Error:', error)
+      console.error('❌ Error cargando datos:', error)
       setError(error.message)
       setLoading(false)
     }
+  }
+
+  const handleDocumentosActualizados = () => {
+    // Recargar documentos cuando se verifique alguno
+    cargarTodosLosDatos()
   }
 
   const handleDescargarContrato = async () => {
@@ -145,19 +147,6 @@ export default function CoachDetailPage() {
     } finally {
       setDownloadingPDF(false)
     }
-  }
-
-  const getTipoDocumentoLabel = (tipo) => {
-    const labels = {
-      'ine_frente': 'INE Frente',
-      'ine_reverso': 'INE Reverso',
-      'comprobante_domicilio': 'Comprobante de Domicilio',
-      'titulo_cedula': 'Título/Cédula',
-      'antecedentes_penales': 'Antecedentes No Penales',
-      'estado_cuenta': 'Estado de Cuenta',
-      'otro': 'Otro'
-    }
-    return labels[tipo] || tipo
   }
 
   if (authLoading || loading) {
@@ -215,6 +204,17 @@ export default function CoachDetailPage() {
             <ArrowLeft size={18} />
             Volver
           </button>
+
+          {coach.estado === 'pendiente' && (
+            <button
+              onClick={() => setMostrarChecklist(true)}
+              className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+              style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}
+            >
+              <FileCheck size={18} />
+              Revisar y Aprobar
+            </button>
+          )}
         </div>
 
         {/* Perfil Header */}
@@ -239,141 +239,255 @@ export default function CoachDetailPage() {
                   {coach.nombre} {coach.apellidos}
                 </h1>
                 <span 
-                  className={`px-3 py-1 rounded-full text-sm font-semibold`}
+                  className="px-3 py-1 rounded-full text-sm font-semibold"
                   style={{
                     background: coach.estado === 'activo' ? 'rgba(16, 185, 129, 0.2)' : 
                                coach.estado === 'pendiente' ? 'rgba(174, 63, 33, 0.2)' : 
                                'rgba(156, 122, 94, 0.2)',
                     color: coach.estado === 'activo' ? '#10b981' : 
-                           coach.estado === 'pendiente' ? '#AE3F21' : 
-                           '#9C7A5E'
+                           coach.estado === 'pendiente' ? '#AE3F21' : '#9C7A5E',
+                    fontFamily: 'Montserrat, sans-serif'
                   }}
                 >
                   {coach.estado === 'activo' ? '🟢 Activo' : 
-                   coach.estado === 'pendiente' ? '⏳ Pendiente' : 
-                   '⚪ Inactivo'}
+                   coach.estado === 'pendiente' ? '🟡 Pendiente' : 
+                   '🔴 Inactivo'}
                 </span>
               </div>
-              
-              <div className="grid grid-cols-2 gap-4 mt-4">
+
+              <div className="flex items-center gap-4 text-sm mb-3" style={{ color: '#B39A72' }}>
                 <div className="flex items-center gap-2">
-                  <Mail size={16} style={{ color: '#B39A72' }} />
-                  <span style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>{coach.email}</span>
+                  <Mail size={16} />
+                  <span>{coach.email}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Phone size={16} style={{ color: '#B39A72' }} />
-                  <span style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>{coach.telefono}</span>
-                </div>
-                {coach.fecha_nacimiento && (
+                {coach.telefono && (
                   <div className="flex items-center gap-2">
-                    <Calendar size={16} style={{ color: '#B39A72' }} />
-                    <span style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                      {new Date(coach.fecha_nacimiento).toLocaleDateString('es-MX')}
-                    </span>
-                  </div>
-                )}
-                {coach.direccion && (
-                  <div className="flex items-center gap-2">
-                    <MapPin size={16} style={{ color: '#B39A72' }} />
-                    <span style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>{coach.direccion}</span>
+                    <Phone size={16} />
+                    <span>{coach.telefono}</span>
                   </div>
                 )}
               </div>
+
+              {coach.es_head_coach && (
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full inline-block" style={{ background: 'rgba(174, 63, 33, 0.2)' }}>
+                  <span className="text-sm font-semibold" style={{ color: '#AE3F21' }}>
+                    👑 Head Coach {coach.categoria_head ? `- ${coach.categoria_head}` : ''}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </Card>
 
-        {/* Checklist de Aprobación (solo para coaches pendientes) */}
-        {coach.estado === 'pendiente' && (
-          <ChecklistAprobacion 
-            coach={coach} 
-            onSuccess={cargarTodosLosDatos}
-          />
-        )}
-
-        {/* Grid de información */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Información Profesional */}
-          <Card>
-            <h2 className="text-xl font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              Información Profesional
-            </h2>
-            
-            {coach.bio && (
-              <div className="mb-4">
-                <p className="text-sm font-semibold mb-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Bio:
-                </p>
-                <p className="text-sm" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  {coach.bio}
-                </p>
+        {/* Información Personal */}
+        <Card>
+          <h2 className="text-xl font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+            Información Personal
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {coach.fecha_nacimiento && (
+              <div className="flex items-center gap-3">
+                <Calendar size={20} style={{ color: '#AE3F21' }} />
+                <div>
+                  <p className="text-xs" style={{ color: '#B39A72' }}>Fecha de Nacimiento</p>
+                  <p className="text-sm font-semibold" style={{ color: '#FFFCF3' }}>
+                    {new Date(coach.fecha_nacimiento).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  </p>
+                </div>
               </div>
             )}
 
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Award size={16} style={{ color: '#AE3F21' }} />
-                <span className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Experiencia: {coach.años_experiencia || 0} años
-                </span>
+            {coach.direccion && (
+              <div className="flex items-center gap-3">
+                <MapPin size={20} style={{ color: '#AE3F21' }} />
+                <div>
+                  <p className="text-xs" style={{ color: '#B39A72' }}>Dirección</p>
+                  <p className="text-sm font-semibold" style={{ color: '#FFFCF3' }}>{coach.direccion}</p>
+                </div>
               </div>
+            )}
 
-              {coach.especialidades && coach.especialidades.length > 0 && (
+            {coach.rfc && (
+              <div className="flex items-center gap-3">
+                <FileText size={20} style={{ color: '#AE3F21' }} />
                 <div>
-                  <p className="text-sm font-semibold mb-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    Especialidades:
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {coach.especialidades.map((esp, idx) => (
-                      <span 
-                        key={idx} 
-                        className="px-3 py-1 rounded-full text-xs"
-                        style={{ background: 'rgba(174, 63, 33, 0.2)', color: '#AE3F21' }}
-                      >
-                        {esp}
-                      </span>
-                    ))}
-                  </div>
+                  <p className="text-xs" style={{ color: '#B39A72' }}>RFC</p>
+                  <p className="text-sm font-semibold" style={{ color: '#FFFCF3' }}>{coach.rfc}</p>
                 </div>
-              )}
+              </div>
+            )}
 
-              {(coach.instagram || coach.facebook || coach.tiktok) && (
+            {coach.contacto_emergencia && (
+              <div className="flex items-center gap-3">
+                <AlertCircle size={20} style={{ color: '#AE3F21' }} />
                 <div>
-                  <p className="text-sm font-semibold mb-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    Redes Sociales:
+                  <p className="text-xs" style={{ color: '#B39A72' }}>Contacto de Emergencia</p>
+                  <p className="text-sm font-semibold" style={{ color: '#FFFCF3' }}>
+                    {coach.contacto_emergencia.nombre} - {coach.contacto_emergencia.telefono}
                   </p>
-                  <div className="space-y-2">
-                    {coach.instagram && (
-                      <div className="flex items-center gap-2">
-                        <Instagram size={16} style={{ color: '#B39A72' }} />
-                        <span className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                          @{coach.instagram}
-                        </span>
-                      </div>
-                    )}
-                    {coach.facebook && (
-                      <div className="flex items-center gap-2">
-                        <Facebook size={16} style={{ color: '#B39A72' }} />
-                        <span className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                          {coach.facebook}
-                        </span>
-                      </div>
-                    )}
-                    {coach.tiktok && (
-                      <div className="flex items-center gap-2">
-                        <Share2 size={16} style={{ color: '#B39A72' }} />
-                        <span className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                          @{coach.tiktok}
-                        </span>
-                      </div>
-                    )}
-                  </div>
                 </div>
-              )}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Información Profesional */}
+        <Card>
+          <h2 className="text-xl font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+            Información Profesional
+          </h2>
+          
+          {coach.bio && (
+            <div className="mb-4">
+              <p className="text-sm font-semibold mb-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Bio:
+              </p>
+              <p className="text-sm" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                {coach.bio}
+              </p>
             </div>
-          </Card>
+          )}
 
-          {/* Información Bancaria */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Award size={16} style={{ color: '#AE3F21' }} />
+              <span className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Experiencia: {coach.años_experiencia || 0} años
+              </span>
+            </div>
+
+            {coach.especialidades && coach.especialidades.length > 0 && (
+              <div>
+                <p className="text-sm font-semibold mb-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Especialidades:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {coach.especialidades.map((esp, idx) => (
+                    <span 
+                      key={idx} 
+                      className="px-3 py-1 rounded-full text-xs"
+                      style={{ background: 'rgba(174, 63, 33, 0.2)', color: '#AE3F21' }}
+                    >
+                      {esp}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(coach.instagram || coach.facebook || coach.tiktok) && (
+              <div>
+                <p className="text-sm font-semibold mb-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Redes Sociales:
+                </p>
+                <div className="flex gap-3">
+                  {coach.instagram && (
+                    <a 
+                      href={`https://instagram.com/${coach.instagram.replace('@', '')}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg transition-all hover:opacity-80"
+                      style={{ background: 'rgba(174, 63, 33, 0.1)', color: '#AE3F21' }}
+                    >
+                      <Instagram size={16} />
+                      <span className="text-sm">{coach.instagram}</span>
+                    </a>
+                  )}
+                  {coach.facebook && (
+                    <a 
+                      href={`https://facebook.com/${coach.facebook}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg transition-all hover:opacity-80"
+                      style={{ background: 'rgba(174, 63, 33, 0.1)', color: '#AE3F21' }}
+                    >
+                      <Facebook size={16} />
+                      <span className="text-sm">{coach.facebook}</span>
+                    </a>
+                  )}
+                  {coach.tiktok && (
+                    <a 
+                      href={`https://tiktok.com/@${coach.tiktok.replace('@', '')}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg transition-all hover:opacity-80"
+                      style={{ background: 'rgba(174, 63, 33, 0.1)', color: '#AE3F21' }}
+                    >
+                      <Share2 size={16} />
+                      <span className="text-sm">{coach.tiktok}</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* 🆕 COMPONENTE DE DOCUMENTOS - INTEGRADO */}
+        <Card>
+          <DocumentosCoachVerificacion 
+            coachId={params.id} 
+            onDocumentosActualizados={handleDocumentosActualizados}
+          />
+        </Card>
+
+        {/* Certificaciones */}
+        <Card>
+          <h2 className="text-xl font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+            Certificaciones ({certificaciones.length})
+          </h2>
+
+          {certificaciones.length === 0 ? (
+            <p className="text-sm text-center py-8" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+              No hay certificaciones registradas
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {certificaciones.map((cert) => (
+                <div 
+                  key={cert.id} 
+                  className="p-4 rounded-lg border flex items-start justify-between gap-4"
+                  style={{ 
+                    borderColor: cert.verificado ? 'rgba(16, 185, 129, 0.3)' : 'rgba(156, 122, 94, 0.2)',
+                    background: cert.verificado ? 'rgba(16, 185, 129, 0.05)' : 'transparent'
+                  }}
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      {cert.verificado && <CheckCircle size={18} style={{ color: '#10b981' }} />}
+                      <h3 className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                        {cert.nombre}
+                      </h3>
+                    </div>
+                    <p className="text-sm mb-1" style={{ color: '#B39A72' }}>
+                      {cert.institucion}
+                    </p>
+                    <p className="text-xs" style={{ color: '#666' }}>
+                      Obtenida: {new Date(cert.fecha_obtencion).toLocaleDateString('es-MX')}
+                      {cert.fecha_vigencia && ` • Vigencia: ${new Date(cert.fecha_vigencia).toLocaleDateString('es-MX')}`}
+                    </p>
+                  </div>
+                  {cert.archivo_url && (
+                    <a
+                      href={cert.archivo_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-2 rounded-lg transition-all hover:opacity-80 flex items-center gap-2"
+                      style={{ background: 'rgba(174, 63, 33, 0.2)', color: '#AE3F21' }}
+                    >
+                      <ExternalLink size={16} />
+                      Ver
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* Información Bancaria */}
+        {(coach.banco || coach.clabe_encriptada) && (
           <Card>
             <h2 className="text-xl font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
               Información Bancaria
@@ -381,224 +495,108 @@ export default function CoachDetailPage() {
             
             <div className="space-y-3">
               {coach.banco && (
-                <div className="flex items-center gap-2">
-                  <Building size={16} style={{ color: '#AE3F21' }} />
-                  <span className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    Banco: {coach.banco}
-                  </span>
+                <div className="flex items-center gap-3">
+                  <Building size={20} style={{ color: '#AE3F21' }} />
+                  <div>
+                    <p className="text-xs" style={{ color: '#B39A72' }}>Banco</p>
+                    <p className="text-sm font-semibold" style={{ color: '#FFFCF3' }}>{coach.banco}</p>
+                  </div>
                 </div>
               )}
               
               {coach.clabe_encriptada && (
-                <div className="flex items-center gap-2">
-                  <CreditCard size={16} style={{ color: '#AE3F21' }} />
-                  <span className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    CLABE: ****{coach.clabe_encriptada.slice(-4)}
-                  </span>
+                <div className="flex items-center gap-3">
+                  <CreditCard size={20} style={{ color: '#AE3F21' }} />
+                  <div>
+                    <p className="text-xs" style={{ color: '#B39A72' }}>CLABE</p>
+                    <p className="text-sm font-semibold" style={{ color: '#FFFCF3' }}>
+                      {'*'.repeat(14)}{coach.clabe_encriptada.slice(-4)}
+                    </p>
+                  </div>
                 </div>
               )}
-              
+
               {coach.titular_cuenta && (
-                <div className="flex items-center gap-2">
-                  <User size={16} style={{ color: '#AE3F21' }} />
-                  <span className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    Titular: {coach.titular_cuenta}
-                  </span>
-                </div>
-              )}
-
-              {coach.rfc && (
-                <div className="flex items-center gap-2">
-                  <FileText size={16} style={{ color: '#AE3F21' }} />
-                  <span className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    RFC: {coach.rfc}
-                  </span>
+                <div className="flex items-center gap-3">
+                  <User size={20} style={{ color: '#AE3F21' }} />
+                  <div>
+                    <p className="text-xs" style={{ color: '#B39A72' }}>Titular</p>
+                    <p className="text-sm font-semibold" style={{ color: '#FFFCF3' }}>{coach.titular_cuenta}</p>
+                  </div>
                 </div>
               )}
             </div>
           </Card>
+        )}
 
-          {/* Contrato */}
-          <Card>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                Contrato
-              </h2>
-              <button
-                onClick={() => setShowEditarContratoModal(true)}
-                className="p-2 rounded-lg transition-all hover:opacity-80"
-                style={{ background: 'rgba(174, 63, 33, 0.2)' }}
-              >
-                <Edit2 size={18} style={{ color: '#AE3F21' }} />
-              </button>
-            </div>
+        {/* Contratos */}
+        <Card>
+          <h2 className="text-xl font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+            Contratos
+          </h2>
 
-            {contratoVigente ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    Estado:
-                  </span>
-                  <span className="text-sm font-semibold" style={{ color: contratoVigente.firmado ? '#10b981' : '#ef4444' }}>
-                    {contratoVigente.firmado ? '✓ Firmado' : '⚠ Sin firmar'}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    Tipo:
-                  </span>
-                  <span className="text-sm font-semibold" style={{ color: '#FFFCF3' }}>
-                    {contratoVigente.tipo_contrato}
-                  </span>
-                </div>
-
-                {contratoVigente.fecha_inicio && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                      Inicio:
-                    </span>
-                    <span className="text-sm font-semibold" style={{ color: '#FFFCF3' }}>
-                      {new Date(contratoVigente.fecha_inicio).toLocaleDateString('es-MX')}
-                    </span>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleDescargarContrato}
-                  disabled={downloadingPDF}
-                  className="w-full py-2 px-4 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center justify-center gap-2"
-                  style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}
+          {contratos.length === 0 ? (
+            <p className="text-sm text-center py-8" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+              No hay contratos registrados
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {contratos.map((contrato) => (
+                <div 
+                  key={contrato.id} 
+                  className="p-4 rounded-lg border flex items-center justify-between"
+                  style={{ 
+                    borderColor: contrato.vigente ? 'rgba(16, 185, 129, 0.3)' : 'rgba(156, 122, 94, 0.2)',
+                    background: contrato.vigente ? 'rgba(16, 185, 129, 0.05)' : 'transparent'
+                  }}
                 >
-                  {downloadingPDF ? (
-                    <>Generando PDF...</>
-                  ) : (
-                    <>
-                      <Download size={18} />
-                      Descargar Contrato PDF
-                    </>
-                  )}
-                </button>
-              </div>
-            ) : (
-              <p className="text-sm text-center py-8" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                No hay contrato vigente
-              </p>
-            )}
-          </Card>
-
-          {/* Documentos */}
-          <Card>
-            <h2 className="text-xl font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              Documentos ({documentos.length})
-            </h2>
-
-            {documentos.length === 0 ? (
-              <p className="text-sm text-center py-8" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                No hay documentos subidos
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {documentos.map((doc) => (
-                  <div 
-                    key={doc.id} 
-                    className="p-3 rounded-lg border flex items-center justify-between" 
-                    style={{ borderColor: 'rgba(156, 122, 94, 0.2)' }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg" style={{ background: 'rgba(174, 63, 33, 0.1)' }}>
-                        <FileText size={20} style={{ color: '#AE3F21' }} />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-sm" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                          {getTipoDocumentoLabel(doc.tipo)}
-                        </p>
-                        <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                          {new Date(doc.fecha_subida).toLocaleDateString('es-MX')}
-                        </p>
-                        {doc.verificado && (
-                          <span className="text-xs" style={{ color: '#10b981' }}>✓ Verificado</span>
-                        )}
-                      </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      {contrato.vigente && <CheckCircle size={18} style={{ color: '#10b981' }} />}
+                      <h3 className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                        Contrato {contrato.vigente ? 'Vigente' : 'Histórico'}
+                      </h3>
                     </div>
-                    <a 
-                      href={doc.archivo_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="p-2 rounded-lg transition-all hover:opacity-80" 
-                      style={{ background: 'rgba(174, 63, 33, 0.2)' }}
-                    >
-                      <ExternalLink size={16} style={{ color: '#AE3F21' }} />
-                    </a>
+                    <p className="text-xs" style={{ color: '#B39A72' }}>
+                      Firmado: {new Date(contrato.fecha_firma || contrato.created_at).toLocaleDateString('es-MX')}
+                    </p>
                   </div>
-                ))}
-              </div>
-            )}
-          </Card>
-
-          {/* Certificaciones */}
-          <Card>
-            <h2 className="text-xl font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              Certificaciones ({certificaciones.length})
-            </h2>
-
-            {certificaciones.length === 0 ? (
-              <p className="text-sm text-center py-8" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                No hay certificaciones registradas
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {certificaciones.map((cert) => (
-                  <div 
-                    key={cert.id} 
-                    className="p-3 rounded-lg border" 
-                    style={{ borderColor: 'rgba(156, 122, 94, 0.2)' }}
+                  <button
+                    onClick={handleDescargarContrato}
+                    disabled={downloadingPDF}
+                    className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2 disabled:opacity-50"
+                    style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}
                   >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                          {cert.nombre}
-                        </p>
-                        <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                          {cert.institucion}
-                        </p>
-                        <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                          Obtenida: {new Date(cert.fecha_obtencion).toLocaleDateString('es-MX')}
-                        </p>
-                        {cert.fecha_vigencia && (
-                          <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                            Vigencia: {new Date(cert.fecha_vigencia).toLocaleDateString('es-MX')}
-                          </p>
-                        )}
-                      </div>
-                      {cert.archivo_url && (
-                        <a 
-                          href={cert.archivo_url} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="p-2 rounded-lg transition-all hover:opacity-80" 
-                          style={{ background: 'rgba(174, 63, 33, 0.2)' }}
-                        >
-                          <ExternalLink size={16} style={{ color: '#AE3F21' }} />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </div>
+                    {downloadingPDF ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Generando...
+                      </>
+                    ) : (
+                      <>
+                        <Download size={16} />
+                        Descargar PDF
+                      </>
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
       </div>
 
-      {/* Modal de Editar Contrato */}
-      <EditarContratoModal
-        isOpen={showEditarContratoModal}
-        onClose={() => setShowEditarContratoModal(false)}
-        coach={coach}
-        contratoActual={contratoVigente}
-        onSuccess={cargarTodosLosDatos}
-      />
+      {/* 🆕 MODAL DE CHECKLIST DE APROBACIÓN */}
+      {mostrarChecklist && (
+        <ChecklistAprobacion 
+          coach={coach}
+          onClose={() => setMostrarChecklist(false)}
+          onSuccess={() => {
+            setMostrarChecklist(false)
+            cargarTodosLosDatos()
+          }}
+        />
+      )}
     </DashboardLayout>
   )
 }
