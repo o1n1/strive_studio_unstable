@@ -15,6 +15,7 @@ import ChecklistAprobacion from '@/components/admin/ChecklistAprobacion'
 import { supabase } from '@/lib/supabase/client'
 import { useProtectedRoute } from '@/hooks/useProtectedRoute'
 import DashboardSkeleton from '@/components/skeletons/DashboardSkeleton'
+import Image from 'next/image'
 
 export default function CoachDetailPage() {
   const params = useParams()
@@ -56,19 +57,27 @@ export default function CoachDetailPage() {
         .single()
 
       if (coachError) throw coachError
+
+      console.log('📦 Datos raw del coach:', coachData)
+      console.log('👤 Profile data:', coachData.profile)
+      console.log('📸 Avatar URL desde profile:', coachData.profile?.avatar_url)
       
       // Combinar datos del coach con el perfil
       const coachCompleto = {
         ...coachData,
+        id: coachData.id,
         nombre: coachData.profile?.nombre || '',
         apellidos: coachData.profile?.apellidos || '',
         email: coachData.profile?.email || '',
         telefono: coachData.profile?.telefono || coachData.telefono || '',
-        avatar_url: coachData.profile?.avatar_url || null
+        avatar_url: coachData.profile?.avatar_url || null,
+        rol: coachData.profile?.rol || 'coach'
       }
 
+      console.log('✅ Coach completo armado:', coachCompleto)
+      console.log('📸 Avatar URL final:', coachCompleto.avatar_url)
+
       setCoach(coachCompleto)
-      console.log('✅ Datos del coach cargados:', coachCompleto)
 
       // Obtener certificaciones
       const { data: certs, error: certsError } = await supabase
@@ -220,18 +229,31 @@ export default function CoachDetailPage() {
         {/* Perfil Header */}
         <Card>
           <div className="flex items-start gap-6">
-            <div 
-              className="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold" 
-              style={{ 
-                background: coach.avatar_url ? 'transparent' : 'rgba(174, 63, 33, 0.2)', 
-                color: '#AE3F21', 
-                backgroundImage: coach.avatar_url ? `url(${coach.avatar_url})` : 'none', 
-                backgroundSize: 'cover', 
-                backgroundPosition: 'center' 
-              }}
-            >
-              {!coach.avatar_url && (coach.nombre?.charAt(0) || 'C')}
-            </div>
+            {/* Avatar con Image de Next.js si existe, sino fallback */}
+            {coach.avatar_url ? (
+              <div className="relative w-24 h-24 rounded-full overflow-hidden" style={{ border: '2px solid #AE3F21' }}>
+                <Image
+                  src={coach.avatar_url}
+                  alt={`${coach.nombre} ${coach.apellidos}`}
+                  fill
+                  className="object-cover"
+                  onError={(e) => {
+                    console.error('❌ Error cargando imagen:', coach.avatar_url)
+                    e.target.style.display = 'none'
+                  }}
+                />
+              </div>
+            ) : (
+              <div 
+                className="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold" 
+                style={{ 
+                  background: 'rgba(174, 63, 33, 0.2)', 
+                  color: '#AE3F21'
+                }}
+              >
+                {coach.nombre?.charAt(0) || 'C'}
+              </div>
+            )}
             
             <div className="flex-1">
               <div className="flex items-center justify-between mb-2">
