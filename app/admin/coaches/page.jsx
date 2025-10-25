@@ -1,16 +1,16 @@
-// app/admin/coaches/page.jsx
+// app/admin/coaches/page.jsx - VERSIÓN CORREGIDA
 'use client'
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   Plus, Search, Eye, CheckCircle, XCircle, 
-  Send, Ban, Loader2, Trash2, Edit2  // ← ✨ MODIFICACIÓN: Agregado Edit2
+  Send, Ban, Loader2, Trash2, Edit2
 } from 'lucide-react'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
 import InvitarCoachModal from '@/components/admin/InvitarCoachModal'
-import EditarCoachAdminModal from '@/components/admin/EditarCoachAdminModal' // ← ✨ NUEVO: Import del modal de edición
+import EditarCoachAdminModal from '@/components/admin/EditarCoachAdminModal'
 import { supabase } from '@/lib/supabase/client'
 import { useProtectedRoute } from '@/hooks/useProtectedRoute'
 import DashboardSkeleton from '@/components/skeletons/DashboardSkeleton'
@@ -25,12 +25,13 @@ export default function AdminCoachesPage() {
   const [error, setError] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [tabActivo, setTabActivo] = useState('todos')
-  const [showInviteModal, setShowInviteModal] = useState(false)
-  const [deleting, setDeleting] = useState(null)
   
-  // ← ✨ NUEVO: Estados para el modal de edición
+  // Estados de modales - IMPORTANTE: inicializar en false
+  const [showInviteModal, setShowInviteModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [coachAEditar, setCoachAEditar] = useState(null)
+  
+  const [deleting, setDeleting] = useState(null)
 
   useEffect(() => {
     if (isAuthorized) {
@@ -82,20 +83,17 @@ export default function AdminCoachesPage() {
     }
   }
 
-  // ← ✨ NUEVO: Función para abrir modal de edición
   const handleEditarCoach = (coach) => {
     console.log('🖊️ Abriendo editor para:', coach.nombre, coach.apellidos)
     setCoachAEditar(coach)
     setShowEditModal(true)
   }
 
-  // ← ✨ NUEVO: Función para cerrar modal de edición
   const handleCloseEditModal = () => {
     setShowEditModal(false)
     setCoachAEditar(null)
   }
 
-  // ← ✨ NUEVO: Función de éxito al editar
   const handleSuccessEdit = async () => {
     console.log('✅ Coach editado exitosamente, recargando datos...')
     await loadData()
@@ -323,7 +321,6 @@ export default function AdminCoachesPage() {
         {/* Búsqueda y Filtros */}
         <Card>
           <div className="flex flex-col md:flex-row gap-4">
-            {/* Búsqueda */}
             <div className="flex-1 relative">
               <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#B39A72' }} />
               <input
@@ -340,7 +337,6 @@ export default function AdminCoachesPage() {
               />
             </div>
 
-            {/* Tabs de Filtrado */}
             <div className="flex gap-2 overflow-x-auto">
               {[
                 { key: 'todos', label: 'Todos' },
@@ -449,7 +445,6 @@ export default function AdminCoachesPage() {
                       </td>
                       <td className="py-4 px-4">
                         <div className="flex items-center justify-end gap-2">
-                          {/* ← ✨ NUEVO: Botón de editar coach */}
                           <button
                             onClick={() => handleEditarCoach(coach)}
                             className="p-2 rounded-lg transition-all hover:opacity-80"
@@ -539,23 +534,26 @@ export default function AdminCoachesPage() {
         )}
       </div>
 
-      {/* Modal de Invitar Coach */}
-      <InvitarCoachModal
-        isOpen={showInviteModal}
-        onClose={() => setShowInviteModal(false)}
-        onSuccess={() => {
-          setShowInviteModal(false)
-          loadData()
-        }}
-      />
+      {/* IMPORTANTE: Los modales deben tener condicional && para evitar renderizado automático */}
+      {showInviteModal && (
+        <InvitarCoachModal
+          isOpen={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          onSuccess={() => {
+            setShowInviteModal(false)
+            loadData()
+          }}
+        />
+      )}
 
-      {/* ← ✨ NUEVO: Modal de Edición de Coach */}
-      <EditarCoachAdminModal
-        isOpen={showEditModal}
-        onClose={handleCloseEditModal}
-        coach={coachAEditar}
-        onSuccess={handleSuccessEdit}
-      />
+      {showEditModal && coachAEditar && (
+        <EditarCoachAdminModal
+          isOpen={showEditModal}
+          onClose={handleCloseEditModal}
+          coach={coachAEditar}
+          onSuccess={handleSuccessEdit}
+        />
+      )}
     </DashboardLayout>
   )
 }
