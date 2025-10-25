@@ -6,7 +6,7 @@ import {
   ArrowLeft, User, Mail, Phone, Calendar, MapPin, 
   FileText, DollarSign, CheckCircle, XCircle, Edit,
   Award, Instagram, Facebook, Share2, Building, CreditCard,
-  Download, ExternalLink, FileCheck, Clock, AlertCircle
+  Download, ExternalLink, FileCheck, Clock, AlertCircle, AlertTriangle
 } from 'lucide-react'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
@@ -15,6 +15,7 @@ import ChecklistAprobacion from '@/components/admin/ChecklistAprobacion'
 import { supabase } from '@/lib/supabase/client'
 import { useProtectedRoute } from '@/hooks/useProtectedRoute'
 import DashboardSkeleton from '@/components/skeletons/DashboardSkeleton'
+import RevisarCambiosModal from '@/components/admin/RevisarCambiosModal'
 
 export default function CoachDetailPage() {
   const params = useParams()
@@ -29,12 +30,15 @@ export default function CoachDetailPage() {
   const [error, setError] = useState(null)
   const [downloadingPDF, setDownloadingPDF] = useState(false)
   const [mostrarChecklist, setMostrarChecklist] = useState(false)
+  const [showRevisarCambiosModal, setShowRevisarCambiosModal] = useState(false)
+  const [cambiosPendientes, setCambiosPendientes] = useState(0)
 
   useEffect(() => {
-    if (params.id) {
+    if (isAuthorized && params.id) {
       cargarTodosLosDatos()
+      verificarCambiosPendientes()
     }
-  }, [params.id])
+  }, [isAuthorized, params.id])
 
   const cargarTodosLosDatos = async () => {
     try {
@@ -97,6 +101,26 @@ export default function CoachDetailPage() {
       console.error('❌ Error cargando datos:', error)
       setError(error.message)
       setLoading(false)
+    }
+  }
+  
+  const verificarCambiosPendientes = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
+      const response = await fetch('/api/coaches/review-changes?estado=pendiente', {
+        headers: { 'Authorization': `Bearer ${session.access_token}` }
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        const pendientes = result.solicitudes.filter(s => s.coach_id === params.id)
+        setCambiosPendientes(pendientes.length)
+        console.log('📊 Cambios pendientes:', pendientes.length)
+      }
+    } catch (error) {
+      console.error('Error verificando cambios:', error)
     }
   }
 
@@ -194,16 +218,46 @@ export default function CoachDetailPage() {
             Volver
           </button>
 
-          {coach.estado === 'pendiente' && (
-            <button
-              onClick={() => setMostrarChecklist(true)}
-              className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
-              style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}
-            >
-              <FileCheck size={18} />
-              Revisar y Aprobar
-            </button>
-          )}
+          <div className="flex gap-3">
+            {/* Botón de revisar cambios - Solo si hay cambios pendientes */}
+            {coach.estado === 'activo' && cambiosPendientes > 0 && (
+              <button
+                onClick={() => setShowRevisarCambiosModal(true)}
+                className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+                style={{ 
+                  background: 'rgba(251, 191, 36, 0.2)', 
+                  color: '#fbbf24', 
+                  fontFamily: 'Montserrat, sans-serif',
+                  border: '1px solid rgba(251, 191, 36, 0.3)'
+                }}
+              >
+                <AlertTriangle size={18} />
+                Revisar Cambios ({cambiosPendientes})
+              </button>
+            )}
+
+            {/* Botones de Aprobar/Rechazar - Solo si está pendiente */}
+            {coach.estado === 'pendiente' && (
+              <>
+                <button 
+                  onClick={handleAprobar}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2" 
+                  style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontFamily: 'Montserrat, sans-serif' }}
+                >
+                  <CheckCircle size={18} />
+                  Aprobar
+                </button>
+                <button 
+                  onClick={handleRechazar}
+                  className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2" 
+                  style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}
+                >
+                  <XCircle size={18} />
+                  Rechazar
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Perfil Header */}
@@ -586,6 +640,18 @@ export default function CoachDetailPage() {
           }}
         />
       )}
+
+      {/* 🆕 MODAL DE REVISAR CAMBIOS PENDIENTES */}
+      <RevisarCambiosModal
+        isOpen={showRevisarCambiosModal}
+        onClose={() => setShowRevisarCambiosModal(false)}
+        coachId={params.id}
+        onSuccess={() => {
+          cargarTodosLosDatos()
+          verificarCambiosPendientes()
+          setShowRevisarCambiosModal(false)
+        }}
+      />
     </DashboardLayout>
   )
 }
