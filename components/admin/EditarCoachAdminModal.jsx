@@ -125,19 +125,21 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
   }
 
   const handleAgregarEspecialidad = () => {
-    if (nuevaEspecialidad.trim() && !formData.especialidades.includes(nuevaEspecialidad.trim())) {
-      setFormData({
+    const especialidadesActuales = formData.especialidades || []
+    if (nuevaEspecialidad.trim() && !especialidadesActuales.includes(nuevaEspecialidad.trim())) {
+        setFormData({
         ...formData,
-        especialidades: [...formData.especialidades, nuevaEspecialidad.trim()]
-      })
-      setNuevaEspecialidad('')
+        especialidades: [...especialidadesActuales, nuevaEspecialidad.trim()]
+        })
+        setNuevaEspecialidad('')
     }
-  }
+    }
 
   const handleEliminarEspecialidad = (index) => {
-    const nuevasEspecialidades = formData.especialidades.filter((_, i) => i !== index)
+    const especialidadesActuales = formData.especialidades || []
+    const nuevasEspecialidades = especialidadesActuales.filter((_, i) => i !== index)
     setFormData({ ...formData, especialidades: nuevasEspecialidades })
-  }
+    }
 
   const detectarCambiosCriticos = () => {
     const criticos = []
@@ -766,7 +768,7 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
               
               {/* Lista de especialidades */}
               <div className="flex flex-wrap gap-2 mb-3">
-                {formData.especialidades.map((esp, index) => (
+                {(formData.especialidades || []).map((esp, index) => (
                   <span
                     key={index}
                     className="px-3 py-1 rounded-full text-sm flex items-center gap-2"
