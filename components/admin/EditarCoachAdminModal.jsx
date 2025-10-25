@@ -1,4 +1,4 @@
-// components/admin/EditarCoachAdminModal.jsx
+// components/admin/EditarCoachAdminModal.jsx - VERSIÓN CORREGIDA
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -9,30 +9,6 @@ import {
   Loader2, Star, Users
 } from 'lucide-react'
 
-/**
- * ==========================================
- * COMPONENTE: EditarCoachAdminModal
- * ==========================================
- * 
- * Modal completo para que ADMINISTRADOR edite información de coaches
- * 
- * CARACTERÍSTICAS:
- * - Edición de todos los campos del coach
- * - Designación de Head Coach
- * - Cambio de categoría (cycling/funcional/ambos)
- * - Cambio de estado (activo/inactivo/etc)
- * - Validaciones en tiempo real
- * - Confirmaciones para cambios críticos
- * - Información bancaria segura
- * - Redes sociales y especialidades
- * - UI profesional y responsive
- * 
- * PROPS:
- * @param {boolean} isOpen - Si el modal está abierto
- * @param {function} onClose - Función para cerrar el modal
- * @param {object} coach - Objeto completo del coach a editar
- * @param {function} onSuccess - Callback al guardar exitosamente
- */
 export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSuccess }) {
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState({})
@@ -41,7 +17,7 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
   const [cambiosCriticos, setCambiosCriticos] = useState([])
   const [nuevaEspecialidad, setNuevaEspecialidad] = useState('')
 
-  // Inicializar formulario cuando cambia el coach
+  // ✅ FIX: Inicializar con valores seguros (arrays vacíos, strings vacíos)
   useEffect(() => {
     if (coach && isOpen) {
       setFormData({
@@ -58,19 +34,18 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
         estado: coach.estado || 'activo',
         is_head_coach: coach.is_head_coach || false,
         banco: coach.banco || '',
-        clabe: '', // No mostramos CLABE actual por seguridad
+        clabe: '',
         titular_cuenta: coach.titular_cuenta || '',
         instagram: coach.instagram || '',
         facebook: coach.facebook || '',
         tiktok: coach.tiktok || '',
-        especialidades: coach.especialidades || [],
+        especialidades: Array.isArray(coach.especialidades) ? coach.especialidades : [], // ✅ FIX: Asegurar array
         notas_admin: coach.notas_admin || ''
       })
       setErrors({})
     }
   }, [coach, isOpen])
 
-  // Validación en tiempo real
   const validateField = (field, value) => {
     const newErrors = { ...errors }
 
@@ -164,7 +139,6 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
     setFormData({ ...formData, especialidades: nuevasEspecialidades })
   }
 
-  // Detectar cambios críticos
   const detectarCambiosCriticos = () => {
     const criticos = []
 
@@ -194,7 +168,6 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    // Validar todos los campos
     let tieneErrores = false
     Object.keys(formData).forEach(field => {
       if (!validateField(field, formData[field])) {
@@ -207,7 +180,6 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
       return
     }
 
-    // Detectar cambios críticos
     const criticos = detectarCambiosCriticos()
     if (criticos.length > 0) {
       setCambiosCriticos(criticos)
@@ -215,7 +187,6 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
       return
     }
 
-    // Si no hay cambios críticos, guardar directamente
     await guardarCambios()
   }
 
@@ -233,11 +204,9 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('No hay sesión activa')
 
-      // Preparar payload (solo enviar campos que cambiaron)
       const payload = {}
       Object.keys(formData).forEach(key => {
         if (key === 'clabe') {
-          // Solo enviar CLABE si se modificó
           if (formData.clabe && formData.clabe.length > 0) {
             payload.clabe = formData.clabe
           }
@@ -282,7 +251,6 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
 
   return (
     <>
-      {/* Modal Principal */}
       <div 
         className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto"
         onClick={onClose}
@@ -701,7 +669,6 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
                 Biografía y Redes Sociales
               </h3>
               
-              {/* Bio */}
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-2" style={{ color: '#FFFCF3' }}>
                   Biografía
@@ -797,7 +764,7 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
                 Especialidades
               </h3>
               
-              {/* Lista de especialidades actuales */}
+              {/* Lista de especialidades */}
               <div className="flex flex-wrap gap-2 mb-3">
                 {formData.especialidades.map((esp, index) => (
                   <span
@@ -817,7 +784,7 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
                 ))}
               </div>
 
-              {/* Agregar nueva especialidad */}
+              {/* Agregar especialidad */}
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -843,7 +810,7 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
               </div>
             </div>
 
-            {/* SECCIÓN: Notas del Admin */}
+            {/* SECCIÓN: Notas Admin */}
             <div>
               <h3 className="text-lg font-bold mb-4 flex items-center gap-2" 
                 style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
@@ -864,7 +831,7 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
               />
             </div>
 
-            {/* Botones de Acción */}
+            {/* Botones */}
             <div className="flex gap-3 pt-4 border-t" style={{ borderColor: 'rgba(156, 122, 94, 0.3)' }}>
               <button
                 type="button"
@@ -906,7 +873,7 @@ export default function EditarCoachAdminModal({ isOpen, onClose, coach, onSucces
         </div>
       </div>
 
-      {/* Modal de Confirmación para Cambios Críticos */}
+      {/* Modal de Confirmación */}
       {showConfirmacion && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-[60]">
           <div 
