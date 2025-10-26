@@ -1,357 +1,268 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { withAuth } from '@/lib/auth/api-auth'
 import { sendCoachInvitationEmail } from '@/lib/email-templates/coach-invitation'
 
-export async function POST(request) {
-  console.log('🔵 [API] POST /api/coaches/invite - Iniciando...')
-  
-  try {
-    // Obtener token del header Authorization
-    const authHeader = request.headers.get('authorization')
-    console.log('🔵 [API] Auth header presente:', !!authHeader)
+/**
+ * API para crear nuevas invitaciones de coaches
+ * Solo accesible por administradores
+ * 
+ * @route POST /api/coaches/invite
+ * @access Admin
+ */
+export const POST = withAuth(
+  async (request, { user, profile, supabase }) => {
+    console.log(`🔵 [API] Admin ${profile.nombre} ${profile.apellidos} creando invitación...`)
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.error('❌ [API] Token faltante o inválido')
-      return NextResponse.json(
-        { error: 'No autenticado - Token faltante' },
-        { status: 401 }
-      )
-    }
-
-    const token = authHeader.replace('Bearer ', '')
-    console.log('🔵 [API] Token extraído (primeros 20 chars):', token.substring(0, 20) + '...')
-
-    // Crear cliente de Supabase con el token del usuario
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      }
-    )
-    
-    console.log('🔵 [API] Cliente Supabase creado')
-
-    // Verificar autenticación
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
-    if (authError) {
-      console.error('❌ [API] Error de autenticación:', authError)
-      return NextResponse.json(
-        { error: 'No autenticado' },
-        { status: 401 }
-      )
-    }
-
-    if (!user) {
-      console.error('❌ [API] No hay usuario')
-      return NextResponse.json(
-        { error: 'No autenticado' },
-        { status: 401 }
-      )
-    }
-
-    console.log('✅ [API] Usuario autenticado:', user.id)
-
-    // Verificar que sea admin
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('rol')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError) {
-      console.error('❌ [API] Error al obtener perfil:', profileError)
-      return NextResponse.json(
-        { error: 'Error al verificar permisos' },
-        { status: 500 }
-      )
-    }
-
-    console.log('🔵 [API] Rol del usuario:', profile?.rol)
-
-    if (!profile || profile.rol !== 'admin') {
-      console.error('❌ [API] Usuario no es admin')
-      return NextResponse.json(
-        { error: 'No autorizado. Solo admins pueden invitar coaches.' },
-        { status: 403 }
-      )
-    }
-
-    console.log('✅ [API] Usuario es admin, continuando...')
-
-    // Obtener datos del body
-    const body = await request.json()
-    console.log('🔵 [API] Body recibido:', JSON.stringify(body, null, 2))
-    
-    const { email, categoria, expiracion, mensaje } = body
-
-    // Validaciones
-    if (!email || !categoria) {
-      console.error('❌ [API] Email o categoría faltante')
-      return NextResponse.json(
-        { error: 'Email y categoría son requeridos' },
-        { status: 400 }
-      )
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
-      console.error('❌ [API] Email inválido:', email)
-      return NextResponse.json(
-        { error: 'Email inválido' },
-        { status: 400 }
-      )
-    }
-
-    if (!['cycling', 'funcional', 'ambos'].includes(categoria)) {
-      console.error('❌ [API] Categoría inválida:', categoria)
-      return NextResponse.json(
-        { error: 'Categoría inválida' },
-        { status: 400 }
-      )
-    }
-
-    console.log('✅ [API] Validaciones pasadas')
-
-    // Verificar si el email ya existe en profiles
-    console.log('🔍 [API] Verificando si email existe en profiles...')
-    const { data: existingProfile, error: profileCheckError } = await supabase
-      .from('profiles')
-      .select('id, email')
-      .eq('email', email.toLowerCase())
-      .maybeSingle()
-
-    if (profileCheckError) {
-      console.error('❌ [API] Error verificando email en profiles:', profileCheckError)
-    }
-
-    console.log('🔍 [API] Email existe en profiles:', !!existingProfile)
-
-    if (existingProfile) {
-      console.error('❌ [API] Email ya registrado:', email)
-      return NextResponse.json(
-        { error: 'Este email ya está registrado en el sistema' },
-        { status: 400 }
-      )
-    }
-
-    // Verificar si ya existe una invitación pendiente con este email
-    console.log('🔍 [API] Verificando invitaciones existentes...')
-    const { data: existingInvitation, error: invCheckError } = await supabase
-      .from('coach_invitations')
-      .select('id, estado')
-      .eq('email', email.toLowerCase())
-      .eq('estado', 'pendiente')
-      .maybeSingle()
-
-    if (invCheckError) {
-      console.error('❌ [API] Error verificando invitaciones:', invCheckError)
-    }
-
-    console.log('🔍 [API] Invitación pendiente existe:', !!existingInvitation)
-
-    if (existingInvitation) {
-      console.error('❌ [API] Ya existe invitación pendiente para:', email)
-      return NextResponse.json(
-        { error: 'Ya existe una invitación pendiente para este email' },
-        { status: 400 }
-      )
-    }
-
-    console.log('✅ [API] Email disponible, creando invitación...')
-
-    // Calcular fecha de expiración
-    const diasExpiracion = parseInt(expiracion) || 7
-    const fechaExpiracion = new Date()
-    fechaExpiracion.setDate(fechaExpiracion.getDate() + diasExpiracion)
-
-    console.log('🔵 [API] Días de expiración:', diasExpiracion)
-    console.log('🔵 [API] Fecha de expiración:', fechaExpiracion.toISOString())
-
-    // Crear invitación en la base de datos
-    const invitacionData = {
-      email: email.toLowerCase(),
-      categoria,
-      estado: 'pendiente',
-      expira_en: fechaExpiracion.toISOString(),
-      invitado_por: user.id,
-      mensaje_personalizado: mensaje || null
-    }
-
-    console.log('🔵 [API] Datos de invitación:', JSON.stringify(invitacionData, null, 2))
-
-    const { data: invitacion, error: inviteError } = await supabase
-      .from('coach_invitations')
-      .insert(invitacionData)
-      .select()
-      .single()
-
-    if (inviteError) {
-      console.error('❌ [API] Error al crear invitación en DB:', inviteError)
-      console.error('❌ [API] Detalles del error:', JSON.stringify(inviteError, null, 2))
-      return NextResponse.json(
-        { error: 'Error al crear la invitación: ' + inviteError.message },
-        { status: 500 }
-      )
-    }
-
-    console.log('✅ [API] Invitación creada en DB:', invitacion.id)
-    console.log('✅ [API] Token generado:', invitacion.token)
-
-    // Generar URL de invitación
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
-    const inviteUrl = `${baseUrl}/onboarding/coach/${invitacion.token}`
-
-    console.log('🔵 [API] URL de invitación:', inviteUrl)
-
-    // Enviar email
-    console.log('📧 [API] Iniciando envío de email...')
     try {
-      const emailResult = await sendCoachInvitationEmail({
-        to: email,
-        categoria,
-        inviteUrl,
-        expiraDias: diasExpiracion,
-        mensajePersonalizado: mensaje
-      })
+      // Obtener datos del body
+      const { email, categoria, mensaje, diasExpiracion = 7 } = await request.json()
+
+      console.log('🔵 [API] Datos de invitación:')
+      console.log('  - Email:', email)
+      console.log('  - Categoría:', categoria)
+      console.log('  - Días expiración:', diasExpiracion)
+
+      // Validaciones
+      if (!email || !categoria) {
+        console.error('❌ [API] Faltan campos requeridos')
+        return NextResponse.json(
+          { error: 'Email y categoría son requeridos' },
+          { status: 400 }
+        )
+      }
+
+      // Validar formato de email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(email)) {
+        console.error('❌ [API] Email inválido:', email)
+        return NextResponse.json(
+          { error: 'Formato de email inválido' },
+          { status: 400 }
+        )
+      }
+
+      // Validar categoría
+      const categoriasValidas = ['cycling', 'boxing', 'funcional', 'yoga', 'pilates']
+      if (!categoriasValidas.includes(categoria)) {
+        console.error('❌ [API] Categoría inválida:', categoria)
+        return NextResponse.json(
+          { error: 'Categoría inválida' },
+          { status: 400 }
+        )
+      }
+
+      // Verificar si ya existe una invitación pendiente para este email
+      const { data: existingInvitation } = await supabase
+        .from('coach_invitations')
+        .select('id, estado')
+        .eq('email', email)
+        .eq('estado', 'pendiente')
+        .single()
+
+      if (existingInvitation) {
+        console.warn('⚠️ [API] Ya existe una invitación pendiente para este email')
+        return NextResponse.json(
+          { error: 'Ya existe una invitación pendiente para este email. Cancélala primero si deseas crear una nueva.' },
+          { status: 409 }
+        )
+      }
+
+      // Generar token único
+      const token = crypto.randomUUID()
       
-      console.log('✅ [API] Email enviado exitosamente:', emailResult.emailId)
-    } catch (emailError) {
-      console.error('❌ [API] Error al enviar email:', emailError)
-      console.error('❌ [API] Stack trace:', emailError.stack)
-      // No fallamos la invitación si el email falla
-      // El admin puede reenviar manualmente
-      console.warn('⚠️ [API] Invitación creada pero email falló - Admin puede reenviar')
-    }
+      // Calcular fecha de expiración
+      const expiraEn = new Date()
+      expiraEn.setDate(expiraEn.getDate() + diasExpiracion)
 
-    console.log('✅ [API] Proceso completado exitosamente')
+      console.log('🔵 [API] Token generado:', token.substring(0, 20) + '...')
+      console.log('🔵 [API] Expira en:', expiraEn.toISOString())
 
-    return NextResponse.json({
-      success: true,
-      message: 'Invitación creada y enviada exitosamente',
-      invitation: {
-        id: invitacion.id,
-        email: invitacion.email,
-        categoria: invitacion.categoria,
-        expira_en: invitacion.expira_en,
-        token: invitacion.token,
-        inviteUrl
+      // Crear invitación en la base de datos
+      const { data: invitacion, error: insertError } = await supabase
+        .from('coach_invitations')
+        .insert({
+          email: email.toLowerCase().trim(),
+          categoria,
+          token,
+          expira_en: expiraEn.toISOString(),
+          estado: 'pendiente',
+          mensaje_personalizado: mensaje || null,
+          invitado_por: user.id
+        })
+        .select()
+        .single()
+
+      if (insertError) {
+        console.error('❌ [API] Error al crear invitación:', insertError)
+        return NextResponse.json(
+          { error: 'Error al crear la invitación: ' + insertError.message },
+          { status: 500 }
+        )
       }
-    })
 
-  } catch (error) {
-    console.error('❌ [API] Error general en POST /api/coaches/invite:', error)
-    console.error('❌ [API] Stack trace:', error.stack)
-    return NextResponse.json(
-      { error: 'Error interno del servidor: ' + error.message },
-      { status: 500 }
-    )
-  }
-}
+      console.log('✅ [API] Invitación creada con ID:', invitacion.id)
 
-// API para reenviar invitación (método PUT)
-export async function PUT(request) {
-  console.log('🔵 [API] PUT /api/coaches/invite - Reenviar invitación...')
-  
-  try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'No autenticado - Token faltante' },
-        { status: 401 }
-      )
-    }
+      // Generar URL de invitación
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+      const inviteUrl = `${baseUrl}/onboarding/coach/${token}`
 
-    const token = authHeader.replace('Bearer ', '')
+      console.log('📧 [API] URL de invitación:', inviteUrl)
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+      // Enviar email de invitación
+      console.log('📧 [API] Enviando email...')
+      try {
+        const emailResult = await sendCoachInvitationEmail({
+          to: email,
+          categoria,
+          inviteUrl,
+          expiraDias: diasExpiracion,
+          mensajePersonalizado: mensaje
+        })
+        
+        console.log('✅ [API] Email enviado exitosamente:', emailResult.emailId)
+      } catch (emailError) {
+        console.error('❌ [API] Error al enviar email:', emailError)
+        console.error('❌ [API] Stack trace:', emailError.stack)
+        // No fallamos la invitación si el email falla
+        // El admin puede reenviar manualmente
+        console.warn('⚠️ [API] Invitación creada pero email falló - Admin puede reenviar')
+      }
+
+      console.log('✅ [API] Proceso completado exitosamente')
+
+      return NextResponse.json({
+        success: true,
+        message: 'Invitación creada y enviada exitosamente',
+        invitation: {
+          id: invitacion.id,
+          email: invitacion.email,
+          categoria: invitacion.categoria,
+          expira_en: invitacion.expira_en,
+          token: invitacion.token,
+          inviteUrl
         }
+      })
+
+    } catch (error) {
+      console.error('❌ [API] Error general en POST /api/coaches/invite:', error)
+      console.error('❌ [API] Stack trace:', error.stack)
+      return NextResponse.json(
+        { error: 'Error interno del servidor: ' + error.message },
+        { status: 500 }
+      )
+    }
+  },
+  { allowedRoles: ['admin'] }
+)
+
+/**
+ * API para reenviar invitaciones existentes
+ * Solo accesible por administradores
+ * 
+ * @route PUT /api/coaches/invite
+ * @access Admin
+ */
+export const PUT = withAuth(
+  async (request, { user, profile, supabase }) => {
+    console.log(`🔵 [API] Admin ${profile.nombre} ${profile.apellidos} reenviando invitación...`)
+    
+    try {
+      // Obtener ID de invitación del body
+      const { invitationId } = await request.json()
+
+      if (!invitationId) {
+        console.error('❌ [API] ID de invitación no proporcionado')
+        return NextResponse.json(
+          { error: 'ID de invitación requerido' },
+          { status: 400 }
+        )
       }
-    )
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
-    if (authError || !user) {
+
+      console.log('🔵 [API] Reenviando invitación ID:', invitationId)
+
+      // Obtener invitación
+      const { data: invitacion, error: fetchError } = await supabase
+        .from('coach_invitations')
+        .select('*')
+        .eq('id', invitationId)
+        .single()
+
+      if (fetchError || !invitacion) {
+        console.error('❌ [API] Invitación no encontrada:', fetchError)
+        return NextResponse.json(
+          { error: 'Invitación no encontrada' },
+          { status: 404 }
+        )
+      }
+
+      // Verificar que la invitación esté pendiente
+      if (invitacion.estado !== 'pendiente') {
+        console.error('❌ [API] Invitación no está pendiente, estado:', invitacion.estado)
+        return NextResponse.json(
+          { error: `No se puede reenviar una invitación con estado: ${invitacion.estado}` },
+          { status: 400 }
+        )
+      }
+
+      // Verificar si la invitación ha expirado
+      const ahora = new Date()
+      const expiracion = new Date(invitacion.expira_en)
+
+      if (expiracion < ahora) {
+        console.error('❌ [API] Invitación expirada')
+        return NextResponse.json(
+          { error: 'Esta invitación ha expirado. Crea una nueva invitación.' },
+          { status: 400 }
+        )
+      }
+
+      // Calcular días restantes
+      const diasRestantes = Math.ceil(
+        (expiracion - ahora) / (1000 * 60 * 60 * 24)
+      )
+
+      console.log('🔵 [API] Días restantes de vigencia:', diasRestantes)
+
+      // Generar URL de invitación
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+      const inviteUrl = `${baseUrl}/onboarding/coach/${invitacion.token}`
+
+      // Reenviar email
+      console.log('📧 [API] Reenviando email a:', invitacion.email)
+      
+      try {
+        await sendCoachInvitationEmail({
+          to: invitacion.email,
+          categoria: invitacion.categoria,
+          inviteUrl,
+          expiraDias: diasRestantes,
+          mensajePersonalizado: invitacion.mensaje_personalizado
+        })
+
+        console.log('✅ [API] Email reenviado exitosamente')
+
+        return NextResponse.json({
+          success: true,
+          message: 'Invitación reenviada exitosamente',
+          diasRestantes
+        })
+
+      } catch (emailError) {
+        console.error('❌ [API] Error al reenviar email:', emailError)
+        return NextResponse.json(
+          { error: 'Error al enviar el email. Verifica la configuración de email.' },
+          { status: 500 }
+        )
+      }
+
+    } catch (error) {
+      console.error('❌ [API] Error general en PUT /api/coaches/invite:', error)
+      console.error('❌ [API] Stack trace:', error.stack)
       return NextResponse.json(
-        { error: 'No autenticado' },
-        { status: 401 }
+        { error: 'Error interno del servidor: ' + error.message },
+        { status: 500 }
       )
     }
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('rol')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile || profile.rol !== 'admin') {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 403 }
-      )
-    }
-
-    const { invitationId } = await request.json()
-
-    // Obtener invitación
-    const { data: invitacion, error: fetchError } = await supabase
-      .from('coach_invitations')
-      .select('*')
-      .eq('id', invitationId)
-      .single()
-
-    if (fetchError || !invitacion) {
-      return NextResponse.json(
-        { error: 'Invitación no encontrada' },
-        { status: 404 }
-      )
-    }
-
-    if (invitacion.estado !== 'pendiente') {
-      return NextResponse.json(
-        { error: 'Solo se pueden reenviar invitaciones pendientes' },
-        { status: 400 }
-      )
-    }
-
-    // Reenviar email
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
-    const inviteUrl = `${baseUrl}/onboarding/coach/${invitacion.token}`
-
-    const diasRestantes = Math.ceil(
-      (new Date(invitacion.expira_en) - new Date()) / (1000 * 60 * 60 * 24)
-    )
-
-    await sendCoachInvitationEmail({
-      to: invitacion.email,
-      categoria: invitacion.categoria,
-      inviteUrl,
-      expiraDias: diasRestantes,
-      mensajePersonalizado: invitacion.mensaje_personalizado
-    })
-
-    return NextResponse.json({
-      success: true,
-      message: 'Invitación reenviada exitosamente'
-    })
-
-  } catch (error) {
-    console.error('❌ [API] Error en PUT /api/coaches/invite:', error)
-    return NextResponse.json(
-      { error: 'Error al reenviar invitación' },
-      { status: 500 }
-    )
-  }
-}
+  },
+  { allowedRoles: ['admin'] }
+)

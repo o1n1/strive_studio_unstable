@@ -1,50 +1,58 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { createServiceClient } from '@/lib/auth/api-auth'
 import { checkRateLimit, getClientIP } from '@/lib/utils/rateLimit'
 import { logger } from '@/lib/utils/logger'
 import { validateEmail, validatePhone } from '@/lib/validations'
 
 const MAX_REGISTRATION_ATTEMPTS = 5
 
+/**
+ * API para completar el registro de usuario
+ * Endpoint PÚBLICO - No requiere autenticación previa
+ * Se llama después de que el usuario se registra con email/password
+ * 
+ * @route POST /api/complete-registration
+ * @access Public
+ */
 export async function POST(request) {
   logger.log('🔵 Endpoint /api/complete-registration llamado')
 
-  // 🛡️ CSRF PROTECTION - Verificar origin
-  const origin = request.headers.get('origin')
-  const allowedOrigins = [
-    process.env.NEXT_PUBLIC_SITE_URL,
-    'http://localhost:3000',
-    'https://localhost:3000'
-  ].filter(Boolean)
-  
-  if (origin && !allowedOrigins.includes(origin)) {
-    logger.warn(`⚠️ Origin no permitido: ${origin}`)
-    return NextResponse.json(
-      { success: false, error: 'Acceso no autorizado' },
-      { status: 403 }
-    )
-  }
-
-  // 🛡️ VALIDACIÓN DE RATE LIMITING
-  const ip = getClientIP(request)
-  const { allowed, remaining } = checkRateLimit(ip, MAX_REGISTRATION_ATTEMPTS)
-  
-  if (!allowed) {
-    logger.warn(`⚠️ Rate limit excedido para IP: ${ip}`)
-    return NextResponse.json(
-      { success: false, error: 'Demasiados intentos. Intenta en 15 minutos.' },
-      { status: 429 }
-    )
-  }
-  
-  logger.log(`✅ Rate limit OK - Intentos restantes: ${remaining}`)
-
   try {
+    // 🛡️ CSRF PROTECTION - Verificar origin
+    const origin = request.headers.get('origin')
+    const allowedOrigins = [
+      process.env.NEXT_PUBLIC_SITE_URL,
+      'http://localhost:3000',
+      'https://localhost:3000'
+    ].filter(Boolean)
+    
+    if (origin && !allowedOrigins.includes(origin)) {
+      logger.warn(`⚠️ Origin no permitido: ${origin}`)
+      return NextResponse.json(
+        { success: false, error: 'Acceso no autorizado' },
+        { status: 403 }
+      )
+    }
+
+    // 🛡️ VALIDACIÓN DE RATE LIMITING
+    const ip = getClientIP(request)
+    const { allowed, remaining } = checkRateLimit(ip, MAX_REGISTRATION_ATTEMPTS)
+    
+    if (!allowed) {
+      logger.warn(`⚠️ Rate limit excedido para IP: ${ip}`)
+      return NextResponse.json(
+        { success: false, error: 'Demasiados intentos. Intenta en 15 minutos.' },
+        { status: 429 }
+      )
+    }
+    
+    logger.log(`✅ Rate limit OK - Intentos restantes: ${remaining}`)
+
     // Validar Content-Type
     if (!request.headers.get('content-type')?.includes('application/json')) {
       logger.error('❌ Content-Type inválido')
       return NextResponse.json(
-        { success: false, error: 'Content-Type inválido' },
+        { success: false, error: 'Content-Type debe ser application/json' },
         { status: 400 }
       )
     }
@@ -86,7 +94,7 @@ export async function POST(request) {
     if (!validatePhone(telefono)) {
       logger.error('❌ Teléfono con formato inválido')
       return NextResponse.json(
-        { success: false, error: 'Formato de teléfono inválido (10 dígitos requeridos)' },
+        { success: false, error: 'Formato de teléfono inválido' },
         { status: 400 }
       )
     }
@@ -94,84 +102,67 @@ export async function POST(request) {
     if (!validatePhone(emergenciaTelefono)) {
       logger.error('❌ Teléfono de emergencia con formato inválido')
       return NextResponse.json(
-        { success: false, error: 'Formato de teléfono de emergencia inválido (10 dígitos requeridos)' },
+        { success: false, error: 'Formato de teléfono de emergencia inválido' },
         { status: 400 }
       )
     }
 
-    // Validar longitud de strings
-    if (nombre.trim().length < 2 || apellidos.trim().length < 2) {
-      logger.error('❌ Nombre o apellidos muy cortos')
+    // Validar longitud de campos
+    if (nombre.length < 2 || nombre.length > 100) {
+      logger.error('❌ Nombre con longitud inválida')
       return NextResponse.json(
-        { success: false, error: 'Nombre y apellidos deben tener al menos 2 caracteres' },
+        { success: false, error: 'El nombre debe tener entre 2 y 100 caracteres' },
         { status: 400 }
       )
     }
 
-    if (emergenciaNombre.trim().length < 2) {
-      logger.error('❌ Nombre de emergencia muy corto')
+    if (apellidos.length < 2 || apellidos.length > 100) {
+      logger.error('❌ Apellidos con longitud inválida')
       return NextResponse.json(
-        { success: false, error: 'Nombre de contacto de emergencia debe tener al menos 2 caracteres' },
+        { success: false, error: 'Los apellidos deben tener entre 2 y 100 caracteres' },
         { status: 400 }
       )
     }
 
-    // Validar formato UUID
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-    if (!uuidRegex.test(userId)) {
-      logger.error('❌ userId inválido')
+    if (emergenciaNombre.length < 2 || emergenciaNombre.length > 100) {
+      logger.error('❌ Nombre de emergencia con longitud inválida')
       return NextResponse.json(
-        { success: false, error: 'userId inválido' },
+        { success: false, error: 'El nombre de emergencia debe tener entre 2 y 100 caracteres' },
         { status: 400 }
       )
     }
 
-    // Sanitizar strings (máximo 255 caracteres)
-    const sanitize = (str) => str.trim().slice(0, 255)
+    logger.log('✅ Todas las validaciones pasaron')
 
-    logger.log('🔑 Verificando credenciales...')
+    // Crear cliente Supabase con Service Role
+    const supabase = createServiceClient()
 
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      logger.error('❌ Variables de entorno faltantes')
-      return NextResponse.json(
-        { success: false, error: 'Configuración del servidor incompleta' },
-        { status: 500 }
-      )
+    // Sanitizar datos para prevenir XSS
+    const sanitize = (str) => {
+      if (!str) return null
+      return str
+        .trim()
+        .replace(/[<>]/g, '') // Remover < y >
+        .substring(0, 500) // Limitar longitud
     }
 
-    // Crear cliente de Supabase con Service Role Key
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    )
+    logger.log('🔄 Llamando función RPC para completar registro...')
 
-    logger.log('✅ Cliente Supabase creado')
-
-    // 🚀 MEJORA: Llamar a función RPC con transacción atómica
-    logger.log('📝 Ejecutando registro con transacción atómica...')
-
-    const { data: result, error: rpcError } = await supabase.rpc(
-      'complete_user_registration',
-      {
+    // Llamar función RPC que maneja la transacción
+    const { data: result, error: rpcError } = await supabase
+      .rpc('complete_user_registration', {
         p_user_id: userId,
-        p_email: sanitize(email),
+        p_email: email.toLowerCase().trim(),
         p_nombre: sanitize(nombre),
         p_apellidos: sanitize(apellidos),
-        p_telefono: sanitize(telefono),
+        p_telefono: telefono.replace(/\s+/g, ''),
         p_emergencia_nombre: sanitize(emergenciaNombre),
-        p_emergencia_telefono: sanitize(emergenciaTelefono),
+        p_emergencia_telefono: emergenciaTelefono.replace(/\s+/g, ''),
         p_alergias: alergias ? sanitize(alergias) : null,
         p_lesiones: lesiones ? sanitize(lesiones) : null,
         p_ip_address: ip,
         p_user_agent: userAgent || null
-      }
-    )
+      })
 
     if (rpcError) {
       logger.error('❌ Error en RPC function:', rpcError)
@@ -225,6 +216,8 @@ export async function POST(request) {
 
   } catch (error) {
     logger.error('💥 Error inesperado:', error)
+    logger.error('💥 Stack trace:', error.stack)
+    
     return NextResponse.json(
       { success: false, error: 'Error inesperado al completar el registro' },
       { status: 500 }

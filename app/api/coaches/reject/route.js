@@ -1,110 +1,104 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { withAuth } from '@/lib/auth/api-auth'
 
-export async function POST(request) {
-  try {
-    console.log('⚠️ [API] Iniciando rechazo de coach...')
+/**
+ * API para rechazar solicitudes de coaches
+ * Solo accesible por administradores
+ * 
+ * @route POST /api/coaches/reject
+ * @access Admin
+ */
+export const POST = withAuth(
+  async (request, { user, profile, supabase }) => {
+    try {
+      console.log(`⚠️ [API] Admin ${profile.nombre} ${profile.apellidos} iniciando rechazo de coach...`)
 
-    // Obtener token del header
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'No autenticado' },
-        { status: 401 }
-      )
-    }
+      // Obtener datos del body
+      const { coachId, motivo } = await request.json()
 
-    const token = authHeader.replace('Bearer ', '')
-
-    // Crear cliente con Service Role Key
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
+      // Validar campos requeridos
+      if (!coachId || !motivo) {
+        console.error('❌ [API] Faltan campos requeridos')
+        return NextResponse.json(
+          { error: 'ID de coach y motivo son requeridos' },
+          { status: 400 }
+        )
       }
-    )
 
-    // Verificar que es admin
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'No autenticado' },
-        { status: 401 }
-      )
-    }
+      // Validar que el motivo no esté vacío
+      if (motivo.trim().length === 0) {
+        console.error('❌ [API] Motivo vacío')
+        return NextResponse.json(
+          { error: 'El motivo del rechazo no puede estar vacío' },
+          { status: 400 }
+        )
+      }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('rol')
-      .eq('id', user.id)
-      .single()
+      console.log(`⚠️ [API] Rechazando coach: ${coachId}`)
+      console.log(`⚠️ [API] Motivo: ${motivo}`)
 
-    if (!profile || profile.rol !== 'admin') {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 403 }
-      )
-    }
+      // Obtener datos del coach antes de actualizar
+      const { data: coachData, error: fetchError } = await supabase
+        .from('profiles')
+        .select('email, nombre, apellidos')
+        .eq('id', coachId)
+        .single()
 
-    const { coachId, motivo } = await request.json()
+      if (fetchError || !coachData) {
+        console.error('❌ [API] Coach no encontrado:', fetchError)
+        return NextResponse.json(
+          { error: 'Coach no encontrado' },
+          { status: 404 }
+        )
+      }
 
-    if (!coachId || !motivo) {
-      return NextResponse.json(
-        { error: 'ID de coach y motivo son requeridos' },
-        { status: 400 }
-      )
-    }
+      console.log(`📧 [API] Coach encontrado: ${coachData.nombre} ${coachData.apellidos} (${coachData.email})`)
 
-    console.log('⚠️ [API] Rechazando coach:', coachId)
+      // Actualizar estado del coach a rechazado
+      const { error: updateError } = await supabase
+        .from('coaches')
+        .update({
+          estado: 'inactivo',
+          activo: false,
+          notas_internas: `RECHAZADO por ${profile.nombre} ${profile.apellidos}: ${motivo}`,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', coachId)
 
-    // Obtener email del coach antes de eliminar
-    const { data: coachData } = await supabase
-      .from('profiles')
-      .select('email, nombre, apellidos')
-      .eq('id', coachId)
-      .single()
+      if (updateError) {
+        console.error('❌ [API] Error actualizando coach:', updateError)
+        return NextResponse.json(
+          { error: 'Error al rechazar coach: ' + updateError.message },
+          { status: 500 }
+        )
+      }
 
-    // Actualizar estado del coach a rechazado
-    const { error: updateError } = await supabase
-      .from('coaches')
-      .update({
-        estado: 'inactivo',
-        activo: false,
-        notas_internas: `RECHAZADO: ${motivo}`,
-        updated_at: new Date().toISOString()
+      console.log('✅ [API] Coach rechazado en base de datos')
+
+      // TODO: Enviar email al coach con el motivo del rechazo
+      // Puedes implementar esto usando la API de notificaciones
+      console.log(`📧 TODO: Enviar email a ${coachData.email} con motivo: ${motivo}`)
+
+      console.log('✅ [API] Proceso de rechazo completado exitosamente')
+
+      return NextResponse.json({
+        success: true,
+        message: 'Coach rechazado exitosamente. Se le notificará por email.',
+        coach: {
+          nombre: coachData.nombre,
+          apellidos: coachData.apellidos,
+          email: coachData.email
+        }
       })
-      .eq('id', coachId)
 
-    if (updateError) {
-      console.error('❌ Error actualizando coach:', updateError)
+    } catch (error) {
+      console.error('❌ [API] Error inesperado rechazando coach:', error)
+      console.error('❌ [API] Stack trace:', error.stack)
       return NextResponse.json(
-        { error: 'Error al rechazar coach: ' + updateError.message },
+        { error: 'Error interno del servidor: ' + error.message },
         { status: 500 }
       )
     }
-
-    // TODO: Enviar email al coach con el motivo del rechazo
-    if (coachData) {
-      console.log(`📧 TODO: Enviar email a ${coachData.email} con motivo: ${motivo}`)
-    }
-
-    console.log('✅ [API] Coach rechazado')
-
-    return NextResponse.json({
-      success: true,
-      message: 'Coach rechazado. Se le notificará por email.'
-    })
-
-  } catch (error) {
-    console.error('❌ [API] Error rechazando coach:', error)
-    return NextResponse.json(
-      { error: 'Error al rechazar coach: ' + error.message },
-      { status: 500 }
-    )
-  }
-}
+  },
+  { allowedRoles: ['admin'] } // 🔒 Solo administradores pueden rechazar coaches
+)
