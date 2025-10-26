@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { 
@@ -12,7 +12,6 @@ import Card from '@/components/ui/Card'
 import { useProtectedRoute } from '@/hooks/useProtectedRoute'
 import DashboardSkeleton from '@/components/skeletons/DashboardSkeleton'
 import InvitarCoachModal from '@/components/admin/InvitarCoachModal'
-import EditarCoachModal from '@/components/admin/EditarCoachModal'
 import { useCoaches, useApproveCoach, useRejectCoach } from '@/hooks/useCoaches'
 import { supabase } from '@/lib/supabase/client'
 import { useUser } from '@/hooks/useUser'
@@ -25,8 +24,6 @@ export default function AdminCoachesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [estadoFilter, setEstadoFilter] = useState('todos')
   const [showInviteModal, setShowInviteModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [coachAEditar, setCoachAEditar] = useState(null)
   const [invitaciones, setInvitaciones] = useState([])
 
   const { coaches, loading: coachesLoading, refetch } = useCoaches()
@@ -34,6 +31,12 @@ export default function AdminCoachesPage() {
   const rejectCoachMutation = useRejectCoach()
 
   const loading = authLoading || coachesLoading
+
+  useEffect(() => {
+    if (isAuthorized) {
+      loadInvitations()
+    }
+  }, [isAuthorized])
 
   const loadInvitations = async () => {
     try {
@@ -47,20 +50,6 @@ export default function AdminCoachesPage() {
     } catch (error) {
       console.error('Error cargando invitaciones:', error)
     }
-  }
-
-  const handleEditarCoach = (coach) => {
-    setCoachAEditar(coach)
-    setShowEditModal(true)
-  }
-
-  const handleCloseEditModal = () => {
-    setShowEditModal(false)
-    setCoachAEditar(null)
-  }
-
-  const handleSuccessEdit = async () => {
-    await refetch()
   }
 
   const handleEliminarCoach = async (coachId) => {
@@ -302,14 +291,6 @@ export default function AdminCoachesPage() {
                     </Link>
 
                     <button
-                      onClick={() => handleEditarCoach(coach)}
-                      className="p-2 rounded-lg transition-all hover:opacity-80"
-                      style={{ background: 'rgba(179, 154, 114, 0.2)' }}
-                      title="Editar">
-                      <Edit size={20} style={{ color: '#B39A72' }} />
-                    </button>
-
-                    <button
                       onClick={() => handleEliminarCoach(coach.id)}
                       className="p-2 rounded-lg transition-all hover:opacity-80"
                       style={{ background: 'rgba(239, 68, 68, 0.2)' }}
@@ -331,14 +312,6 @@ export default function AdminCoachesPage() {
             setShowInviteModal(false)
             loadInvitations()
           }}
-        />
-      )}
-
-      {showEditModal && coachAEditar && (
-        <EditarCoachModal 
-          coach={coachAEditar}
-          onClose={handleCloseEditModal}
-          onSuccess={handleSuccessEdit}
         />
       )}
     </DashboardLayout>
