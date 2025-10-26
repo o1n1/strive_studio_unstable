@@ -11,60 +11,32 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
 import { useProtectedRoute } from '@/hooks/useProtectedRoute'
 import DashboardSkeleton from '@/components/skeletons/DashboardSkeleton'
-import { supabase } from '@/lib/supabase/client'
+import { useUser } from '@/hooks/useUser'
+import { useCoachById, useCoachStats, useCoachClasses } from '@/hooks/useCoaches'
+import { useTimezone } from '@/hooks/useTimezone'
+import { formatTimeInTimezone, formatDateInTimezone } from '@/lib/utils/timezoneUtils'
 
 export default function CoachDashboardPage() {
   const router = useRouter()
   const { isAuthorized, loading: authLoading } = useProtectedRoute('coach')
+  const { user } = useUser()
+  const { timezone } = useTimezone()
   
-  const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState({
-    clasesEstesMes: 0,
-    proximasClases: 0,
-    ratingPromedio: 0,
-    totalClientes: 0
+  const { coach, loading: coachLoading } = useCoachById(user?.id)
+  const { stats, loading: statsLoading } = useCoachStats(user?.id)
+  
+  const today = new Date()
+  const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
+  const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0]
+  
+  const { classes: clasesDelMes, loading: clasesLoading } = useCoachClasses(user?.id, {
+    startDate: firstDayOfMonth,
+    endDate: lastDayOfMonth
   })
-  const [coach, setCoach] = useState(null)
 
-  useEffect(() => {
-    if (isAuthorized) {
-      cargarDatosCoach()
-    }
-  }, [isAuthorized])
+  const loading = authLoading || coachLoading || statsLoading
 
-  const cargarDatosCoach = async () => {
-    try {
-      setLoading(true)
-      
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
-
-      // Cargar datos del coach
-      const { data: coachData } = await supabase
-        .from('coaches_complete')
-        .select('*')
-        .eq('id', session.user.id)
-        .single()
-
-      setCoach(coachData)
-
-      // Aquí puedes agregar más queries para estadísticas
-      // Por ahora valores de ejemplo
-      setStats({
-        clasesEstesMes: coachData?.total_clases || 0,
-        proximasClases: 5,
-        ratingPromedio: coachData?.rating_promedio || 0,
-        totalClientes: 0
-      })
-
-    } catch (error) {
-      console.error('Error cargando datos:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (authLoading || loading) {
+  if (loading) {
     return <DashboardSkeleton />
   }
 
@@ -75,60 +47,45 @@ export default function CoachDashboardPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header con Botón de Editar Perfil */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold" 
               style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              ¡Hola, {coach?.nombre}! 👋
+              ¡Hola, {coach?.nombre}!
             </h1>
-            <p className="text-sm mt-1" 
+            <p className="text-lg mt-1" 
               style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-              Listo para inspirar hoy
+              Dashboard de Coach
             </p>
           </div>
-
-          {/* BOTÓN DE EDITAR PERFIL */}
           <Link href="/coach/editar-perfil">
-            <button
-              className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-90 flex items-center gap-2"
-              style={{ 
-                background: '#AE3F21', 
-                color: '#FFFCF3', 
-                fontFamily: 'Montserrat, sans-serif' 
-              }}
-            >
+            <button className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80"
+              style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
               <Edit size={18} />
-              Editar Mi Perfil
+              Editar Perfil
             </button>
           </Link>
         </div>
 
-        {/* Alerta si el coach está pendiente */}
         {coach?.estado === 'pendiente' && (
           <Card>
-            <div className="flex items-start gap-3 p-4"
-              style={{ 
-                background: 'rgba(251, 191, 36, 0.1)', 
-                border: '1px solid rgba(251, 191, 36, 0.3)',
-                borderRadius: '12px'
-              }}>
-              <Clock size={24} style={{ color: '#fbbf24', flexShrink: 0 }} />
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center"
+                style={{ background: 'rgba(251, 191, 36, 0.2)' }}>
+                <Clock size={24} style={{ color: '#fbbf24' }} />
+              </div>
               <div>
-                <p className="font-bold mb-1" 
-                  style={{ color: '#fbbf24', fontFamily: 'Montserrat, sans-serif' }}>
-                  Tu perfil está en revisión
-                </p>
-                <p className="text-sm" 
-                  style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  El equipo está revisando tu solicitud. Te notificaremos cuando sea aprobada.
+                <h3 className="text-lg font-bold mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                  Solicitud en Revisión
+                </h3>
+                <p style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Tu solicitud está siendo revisada por el equipo. Te notificaremos cuando sea aprobada.
                 </p>
               </div>
             </div>
           </Card>
         )}
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <div className="text-center py-4">
@@ -137,7 +94,7 @@ export default function CoachDashboardPage() {
               </div>
               <p className="text-3xl font-bold mb-1" 
                 style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                {stats.clasesEstesMes}
+                {clasesDelMes?.length || 0}
               </p>
               <p className="text-sm" 
                 style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
@@ -153,7 +110,7 @@ export default function CoachDashboardPage() {
               </div>
               <p className="text-3xl font-bold mb-1" 
                 style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                {stats.proximasClases}
+                {stats?.proximas_clases || 0}
               </p>
               <p className="text-sm" 
                 style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
@@ -169,7 +126,7 @@ export default function CoachDashboardPage() {
               </div>
               <p className="text-3xl font-bold mb-1" 
                 style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                {stats.ratingPromedio.toFixed(1)}
+                {coach?.rating_promedio?.toFixed(1) || '0.0'}
               </p>
               <p className="text-sm" 
                 style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
@@ -185,7 +142,7 @@ export default function CoachDashboardPage() {
               </div>
               <p className="text-3xl font-bold mb-1" 
                 style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                {stats.totalClientes}
+                {stats?.total_clientes || 0}
               </p>
               <p className="text-sm" 
                 style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
@@ -195,7 +152,6 @@ export default function CoachDashboardPage() {
           </Card>
         </div>
 
-        {/* Acciones Rápidas */}
         <Card>
           <h2 className="text-xl font-bold mb-4" 
             style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
@@ -219,8 +175,8 @@ export default function CoachDashboardPage() {
 
             <Link href="/coach/editar-perfil">
               <div className="p-4 rounded-lg transition-all hover:opacity-80 cursor-pointer"
-                style={{ background: 'rgba(156, 122, 94, 0.1)', border: '1px solid rgba(156, 122, 94, 0.2)' }}>
-                <Edit size={24} style={{ color: '#B39A72' }} className="mb-2" />
+                style={{ background: 'rgba(174, 63, 33, 0.1)', border: '1px solid rgba(174, 63, 33, 0.2)' }}>
+                <Edit size={24} style={{ color: '#AE3F21' }} className="mb-2" />
                 <p className="font-semibold" 
                   style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
                   Editar Perfil
@@ -232,33 +188,55 @@ export default function CoachDashboardPage() {
               </div>
             </Link>
 
-            <div className="p-4 rounded-lg transition-all hover:opacity-80 cursor-pointer"
-              style={{ background: 'rgba(156, 122, 94, 0.1)', border: '1px solid rgba(156, 122, 94, 0.2)' }}>
-              <Award size={24} style={{ color: '#B39A72' }} className="mb-2" />
-              <p className="font-semibold" 
-                style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                Mis Estadísticas
-              </p>
-              <p className="text-xs mt-1" 
-                style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                Performance y métricas
-              </p>
-            </div>
+            <Link href="/coach/estadisticas">
+              <div className="p-4 rounded-lg transition-all hover:opacity-80 cursor-pointer"
+                style={{ background: 'rgba(174, 63, 33, 0.1)', border: '1px solid rgba(174, 63, 33, 0.2)' }}>
+                <TrendingUp size={24} style={{ color: '#AE3F21' }} className="mb-2" />
+                <p className="font-semibold" 
+                  style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                  Mis Estadísticas
+                </p>
+                <p className="text-xs mt-1" 
+                  style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Rendimiento y métricas
+                </p>
+              </div>
+            </Link>
           </div>
         </Card>
 
-        {/* Próximas Clases */}
-        <Card>
-          <h2 className="text-xl font-bold mb-4" 
-            style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-            Próximas Clases
-          </h2>
-          <div className="text-center py-8">
-            <p style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-              No tienes clases programadas próximamente
-            </p>
-          </div>
-        </Card>
+        {clasesDelMes && clasesDelMes.length > 0 && (
+          <Card>
+            <h2 className="text-xl font-bold mb-4" 
+              style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              Mis Próximas Clases
+            </h2>
+            <div className="space-y-3">
+              {clasesDelMes.slice(0, 5).map((clase) => (
+                <div key={clase.id} 
+                  className="p-4 rounded-lg flex items-center justify-between"
+                  style={{ background: 'rgba(42, 42, 42, 0.6)', border: '1px solid rgba(156, 122, 94, 0.2)' }}>
+                  <div className="flex-1">
+                    <p className="font-semibold mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                      {clase.tipo_nombre || 'Clase'}
+                    </p>
+                    <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                      {formatDateInTimezone(clase.fecha, timezone)} • {formatTimeInTimezone(clase.hora_inicio, timezone)}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                      {clase.reservas_actuales}/{clase.capacidad}
+                    </p>
+                    <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                      Reservas
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
     </DashboardLayout>
   )
