@@ -1,6 +1,17 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 
+// Configuración para aumentar límite de body
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '50mb',
+    },
+  },
+}
+
+export const maxDuration = 60 // 60 segundos timeout
+
 export async function POST(request) {
   try {
     console.log('🚀 [API] Iniciando proceso de onboarding completo...')
@@ -235,7 +246,6 @@ export async function POST(request) {
           .single()
         
         if (!templateError && template) {
-          // Variables correctas que coinciden con el frontend
           const reemplazos = {
             '{nombre}': formData.nombre,
             '{apellidos}': formData.apellidos,
@@ -249,7 +259,7 @@ export async function POST(request) {
           
           contenidoTemplate = template.contenido
           Object.keys(reemplazos).forEach(key => {
-            contenidoTemplate = contenidoTemplate.replace(new RegExp(key, 'g'), reemplazos[key])
+            contenidoTemplate = contenidoTemplate.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), reemplazos[key])
           })
           
           console.log('✅ [API] Template personalizado con variables correctas')
