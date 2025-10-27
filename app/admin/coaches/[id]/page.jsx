@@ -46,36 +46,35 @@ export default function CoachDetailPage() {
       setLoading(true)
       console.log('📥 Cargando datos del coach:', params.id)
 
-      // Cargar datos del coach con join a profiles
+      // Query 1: Datos del coach
       const { data: coachData, error: coachError } = await supabase
         .from('coaches')
-        .select(`
-          *,
-          profiles!inner (
-            nombre,
-            apellidos,
-            email,
-            telefono,
-            avatar_url
-          )
-        `)
+        .select('*')
         .eq('id', params.id)
         .single()
 
       if (coachError) throw coachError
+
+      // Query 2: Datos del profile (separado)
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('nombre, apellidos, email, telefono, avatar_url')
+        .eq('id', params.id)
+        .single()
+
+      if (profileError) throw profileError
       
       // Combinar datos
       setCoach({
         ...coachData,
-        nombre: coachData.profiles?.nombre,
-        apellidos: coachData.profiles?.apellidos,
-        email: coachData.profiles?.email,
-        telefono_profile: coachData.profiles?.telefono,
-        avatar_url: coachData.profiles?.avatar_url
+        nombre: profileData.nombre,
+        apellidos: profileData.apellidos,
+        email: profileData.email,
+        telefono_profile: profileData.telefono,
+        avatar_url: profileData.avatar_url
       })
 
-      console.log('✅ Datos del coach cargados:', coachData)
-      console.log('✅ Avatar URL:', coachData.profiles?.avatar_url)
+      console.log('✅ Datos del coach cargados')
 
       // Cargar certificaciones
       const { data: certs } = await supabase
@@ -84,7 +83,6 @@ export default function CoachDetailPage() {
         .eq('coach_id', params.id)
         .order('fecha_obtencion', { ascending: false })
       setCertificaciones(certs || [])
-      console.log('✅ Certificaciones cargadas:', certs?.length || 0)
 
       // Cargar documentos
       const { data: docs } = await supabase
@@ -93,7 +91,6 @@ export default function CoachDetailPage() {
         .eq('coach_id', params.id)
         .order('fecha_subida', { ascending: false })
       setDocumentos(docs || [])
-      console.log('✅ Documentos cargados:', docs?.length || 0)
 
       // Cargar contratos
       const { data: contracts } = await supabase
@@ -102,7 +99,6 @@ export default function CoachDetailPage() {
         .eq('coach_id', params.id)
         .order('created_at', { ascending: false })
       setContratos(contracts || [])
-      console.log('✅ Contratos cargados:', contracts?.length || 0)
 
       // Cargar pagos
       const { data: payments } = await supabase
@@ -149,8 +145,6 @@ export default function CoachDetailPage() {
     try {
       setDownloadingPDF(true)
       
-      console.log('📄 Generando PDF para coach:', params.id)
-      
       const response = await fetch(`/api/coaches/${params.id}/contract/pdf`)
       
       if (!response.ok) {
@@ -159,7 +153,6 @@ export default function CoachDetailPage() {
       }
 
       const blob = await response.blob()
-      
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -169,7 +162,6 @@ export default function CoachDetailPage() {
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
       
-      console.log('✅ PDF descargado exitosamente')
     } catch (error) {
       console.error('❌ Error descargando PDF:', error)
       alert('Error al descargar el contrato: ' + error.message)
@@ -246,7 +238,6 @@ export default function CoachDetailPage() {
             Volver
           </button>
 
-          {/* Botones de Aprobar/Rechazar - Solo si está pendiente */}
           {coach.estado === 'pendiente' && (
             <button 
               onClick={() => setShowChecklistModal(true)}
@@ -354,82 +345,10 @@ export default function CoachDetailPage() {
           </div>
         </Card>
 
-        {/* Redes Sociales */}
-        {(coach.instagram || coach.facebook || coach.tiktok) && (
-          <Card title="Redes Sociales">
-            <div className="flex gap-4">
-              {coach.instagram && (
-                <a 
-                  href={`https://instagram.com/${coach.instagram}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all hover:opacity-80"
-                  style={{ background: 'rgba(225, 48, 108, 0.2)', color: '#e1306c' }}
-                >
-                  <Instagram size={18} />
-                  @{coach.instagram}
-                </a>
-              )}
-              {coach.facebook && (
-                <a 
-                  href={`https://facebook.com/${coach.facebook}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all hover:opacity-80"
-                  style={{ background: 'rgba(24, 119, 242, 0.2)', color: '#1877f2' }}
-                >
-                  <Facebook size={18} />
-                  {coach.facebook}
-                </a>
-              )}
-              {coach.tiktok && (
-                <a 
-                  href={`https://tiktok.com/@${coach.tiktok}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all hover:opacity-80"
-                  style={{ background: 'rgba(255, 255, 255, 0.2)', color: '#FFFCF3' }}
-                >
-                  <Share2 size={18} />
-                  @{coach.tiktok}
-                </a>
-              )}
-            </div>
-          </Card>
-        )}
-
-        {/* Información Bancaria */}
-        {(coach.banco || coach.clabe_encriptada || coach.titular_cuenta) && (
-          <Card title="Información Bancaria">
-            <div className="grid grid-cols-2 gap-6">
-              {coach.banco && (
-                <div>
-                  <label className="text-sm mb-1 block" style={{ color: '#B39A72' }}>Banco</label>
-                  <p style={{ color: '#FFFCF3' }}>{coach.banco}</p>
-                </div>
-              )}
-              {coach.titular_cuenta && (
-                <div>
-                  <label className="text-sm mb-1 block" style={{ color: '#B39A72' }}>Titular</label>
-                  <p style={{ color: '#FFFCF3' }}>{coach.titular_cuenta}</p>
-                </div>
-              )}
-              {coach.clabe_encriptada && (
-                <div className="col-span-2">
-                  <label className="text-sm mb-1 block" style={{ color: '#B39A72' }}>CLABE</label>
-                  <p style={{ color: '#FFFCF3' }}>••••••••••••{coach.clabe_encriptada.slice(-4)}</p>
-                </div>
-              )}
-            </div>
-          </Card>
-        )}
-
         {/* Documentos */}
         <Card title="Documentos">
           {documentos.length === 0 ? (
-            <p className="text-center py-8" style={{ color: '#B39A72' }}>
-              No hay documentos cargados
-            </p>
+            <p className="text-center py-8" style={{ color: '#B39A72' }}>No hay documentos cargados</p>
           ) : (
             <div className="grid grid-cols-2 gap-4">
               {documentos.map(doc => (
@@ -445,9 +364,7 @@ export default function CoachDetailPage() {
                     <span className="text-sm font-semibold" style={{ color: '#FFFCF3' }}>
                       {getTipoDocumentoLabel(doc.tipo)}
                     </span>
-                    {doc.verificado && (
-                      <CheckCircle size={16} style={{ color: '#10b981' }} />
-                    )}
+                    {doc.verificado && <CheckCircle size={16} style={{ color: '#10b981' }} />}
                   </div>
                   <a 
                     href={doc.archivo_url}
@@ -468,9 +385,7 @@ export default function CoachDetailPage() {
         {/* Certificaciones */}
         <Card title="Certificaciones">
           {certificaciones.length === 0 ? (
-            <p className="text-center py-8" style={{ color: '#B39A72' }}>
-              No hay certificaciones registradas
-            </p>
+            <p className="text-center py-8" style={{ color: '#B39A72' }}>No hay certificaciones registradas</p>
           ) : (
             <div className="space-y-3">
               {certificaciones.map(cert => (
@@ -483,16 +398,12 @@ export default function CoachDetailPage() {
                   }}
                 >
                   <div className="flex-1">
-                    <h4 className="font-semibold mb-1" style={{ color: '#FFFCF3' }}>
-                      {cert.nombre}
-                    </h4>
+                    <h4 className="font-semibold mb-1" style={{ color: '#FFFCF3' }}>{cert.nombre}</h4>
                     <p className="text-sm" style={{ color: '#B39A72' }}>
                       {cert.institucion} • {new Date(cert.fecha_obtencion).getFullYear()}
                     </p>
                   </div>
-                  {cert.verificado && (
-                    <CheckCircle size={20} style={{ color: '#10b981' }} />
-                  )}
+                  {cert.verificado && <CheckCircle size={20} style={{ color: '#10b981' }} />}
                 </div>
               ))}
             </div>
@@ -502,9 +413,7 @@ export default function CoachDetailPage() {
         {/* Contratos */}
         <Card title="Contratos">
           {contratos.length === 0 ? (
-            <p className="text-center py-8" style={{ color: '#B39A72' }}>
-              No hay contratos registrados
-            </p>
+            <p className="text-center py-8" style={{ color: '#B39A72' }}>No hay contratos registrados</p>
           ) : (
             <div className="space-y-3">
               {contratos.map(contrato => (
@@ -556,7 +465,7 @@ export default function CoachDetailPage() {
         </Card>
       </div>
 
-      {/* Modal de Checklist de Aprobación */}
+      {/* Modal Checklist Aprobación */}
       {showChecklistModal && (
         <ChecklistAprobacion
           isOpen={showChecklistModal}
@@ -571,7 +480,7 @@ export default function CoachDetailPage() {
         />
       )}
 
-      {/* Modal de Editar Contrato */}
+      {/* Modal Editar Contrato */}
       {showEditarContratoModal && (
         <EditarContratoModal
           isOpen={showEditarContratoModal}
