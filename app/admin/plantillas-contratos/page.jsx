@@ -10,7 +10,7 @@ export default function PlantillasContratosPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [plantillas, setPlantillas] = useState([])
-  const [tabActivo, setTabActivo] = useState('coaches') // coaches | staff
+  const [tabActivo, setTabActivo] = useState('coaches')
   const [editando, setEditando] = useState(null)
   const [formData, setFormData] = useState({
     nombre: '',
@@ -133,21 +133,16 @@ export default function PlantillasContratosPage() {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       )
 
-      const { data: { session } } = await supabase.auth.getSession()
-
-      // Determinar tipo_contrato según categoría
       const tipo_contrato = tabActivo === 'coaches' ? 'por_clase' : 'freelance'
 
       if (editando === 'nueva') {
-        // Crear nueva plantilla
         const plantillaData = {
           nombre: formData.nombre.trim(),
           tipo_contrato,
           contenido: formData.contenido.trim(),
           vigente: true,
           es_default: false,
-          version: 1,
-          creado_por: session.user.id
+          version: 1
         }
 
         const { error } = await supabase
@@ -158,7 +153,6 @@ export default function PlantillasContratosPage() {
 
         alert('✅ Plantilla creada correctamente')
       } else {
-        // Actualizar plantilla existente
         const plantillaData = {
           nombre: formData.nombre.trim(),
           contenido: formData.contenido.trim(),
@@ -195,16 +189,13 @@ export default function PlantillasContratosPage() {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       )
 
-      // Determinar tipo_contrato según tab
       const tipo_contrato = tabActivo === 'coaches' ? 'por_clase' : 'freelance'
 
-      // Desactivar todas las demás del mismo tipo
       await supabase
         .from('contract_templates')
         .update({ es_default: false })
         .eq('tipo_contrato', tipo_contrato)
 
-      // Activar la seleccionada
       const { error } = await supabase
         .from('contract_templates')
         .update({ 
@@ -262,7 +253,6 @@ export default function PlantillasContratosPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
@@ -282,14 +272,11 @@ export default function PlantillasContratosPage() {
           </button>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-2">
           <button
             onClick={() => setTabActivo('coaches')}
             className={`px-6 py-3 rounded-lg font-semibold transition-all ${
-              tabActivo === 'coaches' 
-                ? 'opacity-100' 
-                : 'opacity-50 hover:opacity-75'
+              tabActivo === 'coaches' ? 'opacity-100' : 'opacity-50 hover:opacity-75'
             }`}
             style={{ 
               background: tabActivo === 'coaches' ? '#AE3F21' : 'rgba(174, 63, 33, 0.3)',
@@ -302,9 +289,7 @@ export default function PlantillasContratosPage() {
           <button
             onClick={() => setTabActivo('staff')}
             className={`px-6 py-3 rounded-lg font-semibold transition-all ${
-              tabActivo === 'staff' 
-                ? 'opacity-100' 
-                : 'opacity-50 hover:opacity-75'
+              tabActivo === 'staff' ? 'opacity-100' : 'opacity-50 hover:opacity-75'
             }`}
             style={{ 
               background: tabActivo === 'staff' ? '#AE3F21' : 'rgba(174, 63, 33, 0.3)',
@@ -316,7 +301,6 @@ export default function PlantillasContratosPage() {
           </button>
         </div>
 
-        {/* Plantilla Activa */}
         {plantillaActiva && (
           <Card>
             <div className="flex items-start justify-between mb-4">
@@ -421,7 +405,6 @@ export default function PlantillasContratosPage() {
           </Card>
         )}
 
-        {/* Nueva Plantilla */}
         {editando === 'nueva' && (
           <Card>
             <div className="flex items-center gap-3 mb-6">
@@ -497,7 +480,6 @@ export default function PlantillasContratosPage() {
           </Card>
         )}
 
-        {/* Historial */}
         {historial.length > 0 && (
           <Card>
             <div className="flex items-center gap-3 mb-4">
@@ -555,7 +537,6 @@ export default function PlantillasContratosPage() {
           </Card>
         )}
 
-        {/* Empty State */}
         {!plantillaActiva && historial.length === 0 && (
           <Card>
             <div className="text-center py-12">
