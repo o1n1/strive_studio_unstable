@@ -60,48 +60,33 @@ export async function POST(request) {
     const userId = authData.user.id
     console.log('✅ [API] Usuario creado:', userId)
 
-    // 3. ESPERAR a que profile exista
-    console.log('⏳ [API] Esperando creación de profile...')
-    let profileExists = false
-    let attempts = 0
-    
-    while (!profileExists && attempts < 10) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', userId)
-        .single()
-      
-      if (profile) {
-        profileExists = true
-        console.log('✅ [API] Profile verificado')
-      } else {
-        attempts++
-        await new Promise(resolve => setTimeout(resolve, 500))
-      }
-    }
-
-    if (!profileExists) {
-      return NextResponse.json(
-        { error: 'Error creando perfil de usuario' },
-        { status: 500 }
-      )
-    }
-
-    // 4. Actualizar profile
-    console.log('📝 [API] Actualizando perfil...')
-    await supabase
+    // 3. CREAR PROFILE MANUALMENTE (sin esperar trigger)
+    console.log('👤 [API] Creando profile manualmente...')
+    const { error: profileError } = await supabase
       .from('profiles')
-      .update({
+      .insert({
+        id: userId,
+        email: formData.email,
         nombre: formData.nombre,
         apellidos: formData.apellidos,
         telefono: formData.telefono,
         rol: 'coach',
-        foto_url: formData.foto_perfil || null
+        avatar_url: formData.foto_perfil || null,
+        activo: true,
+        require_email_verification: false
       })
-      .eq('id', userId)
 
-    // 5. Crear coach
+    if (profileError) {
+      console.error('❌ [API] Error creando profile:', profileError)
+      return NextResponse.json(
+        { error: 'Error creando perfil: ' + profileError.message },
+        { status: 500 }
+      )
+    }
+
+    console.log('✅ [API] Profile creado exitosamente')
+
+    // 4. Crear coach
     console.log('🏋️ [API] Creando coach...')
     const { error: coachError } = await supabase
       .from('coaches')
@@ -140,7 +125,7 @@ export async function POST(request) {
 
     console.log('✅ [API] Coach creado')
 
-    // 6. Subir archivos
+    // 5. Subir archivos
     console.log('📤 [API] Subiendo archivos...')
     const uploadedFiles = {}
     const archivos = [
@@ -154,157 +139,133 @@ export async function POST(request) {
         try {
           const base64Data = file.split(',')[1]
           const buffer = Buffer.from(base64Data, 'base64')
-          const ext = file.match(/data:image\/(\w+);/)?.[1] || 'png'
-          const filename = `${userId}/${key}_${Date.now()}.${ext}`
+          const ext = file.match(/data:image\/(\w+);/)?.[1] || 'jpg'
+          const fileName = `${userId}/${key}-${Date.now()}.${ext}`
 
-          const { error: uploadError } = await supabase.storage
-            .from('documents')
-            .upload(filename, buffer, {
+          const { data, error } = await supabase.storage
+            .from('coach-documents')
+            .upload(fileName, buffer, {
               contentType: `image/${ext}`,
               upsert: false
             })
 
-          if (!uploadError) {
-            const { data: urlData } = supabase.storage
-              .from('documents')
-              .getPublicUrl(filename)
-            uploadedFiles[key] = urlData.publicUrl
-          }
-        } catch (err) {
-          console.error(`⚠️ Error subiendo ${key}:`, err)
+          if (error) throw error
+
+          const { data: publicData } = supabase.storage
+            .from('coach-documents')
+            .getPublicUrl(fileName)
+
+          uploadedFiles[key] = publicData.publicUrl
+        } catch (error) {
+          console.error(`❌ [API] Error subiendo ${key}:`, error)
         }
       }
     }
 
-    // 7. Guardar referencias de documentos
-    const documentos = []
-    if (uploadedFiles.ine_frente) {
-      documentos.push({
+    console.log('✅ [API] Archivos subidos')
+
+    // 6. Guardar documentos en BD
+    if (Object.keys(uploadedFiles).length > 0) {
+      console.log('💾 [API] Guardando registros de documentos...')
+      const docsToInsert = Object.entries(uploadedFiles).map(([tipo, url]) => ({
         coach_id: userId,
-        tipo: 'ine_frente',
-        nombre_archivo: 'INE Frente',
-        archivo_url: uploadedFiles.ine_frente,
+        tipo,
+        nombre_archivo: tipo.replace('_', ' '),
+        archivo_url: url,
         verificado: false
-      })
-    }
-    if (uploadedFiles.ine_reverso) {
-      documentos.push({
-        coach_id: userId,
-        tipo: 'ine_reverso',
-        nombre_archivo: 'INE Reverso',
-        archivo_url: uploadedFiles.ine_reverso,
-        verificado: false
-      })
-    }
-    if (uploadedFiles.comprobante_domicilio) {
-      documentos.push({
-        coach_id: userId,
-        tipo: 'comprobante_domicilio',
-        nombre_archivo: 'Comprobante de Domicilio',
-        archivo_url: uploadedFiles.comprobante_domicilio,
-        verificado: false
-      })
+      }))
+
+      await supabase.from('coach_documents').insert(docsToInsert)
+      console.log('✅ [API] Documentos guardados')
     }
 
-    if (documentos.length > 0) {
-      await supabase.from('coach_documents').insert(documentos)
+    // 7. Obtener template de contrato activo
+    console.log('📄 [API] Buscando template de contrato...')
+    const { data: template, error: templateError } = await supabase
+      .from('contract_templates')
+      .select('*')
+      .eq('tipo_contrato', 'por_clase')
+      .eq('vigente', true)
+      .eq('es_default', true)
+      .single()
+
+    let contenidoContrato = 'CONTRATO DE PRESTACIÓN DE SERVICIOS\n\nEste contrato es entre Strive Studio y el coach.'
+    
+    if (!templateError && template) {
+      console.log('✅ [API] Template encontrado:', template.nombre)
+      // Reemplazar variables en el template
+      contenidoContrato = template.contenido
+        .replace(/\{nombre\}/g, formData.nombre)
+        .replace(/\{apellidos\}/g, formData.apellidos)
+        .replace(/\{fecha_inicio\}/g, new Date().toLocaleDateString('es-MX'))
+        .replace(/\{tipo_contrato\}/g, 'Por Clase')
+    } else {
+      console.log('⚠️ [API] No se encontró template, usando contenido default')
     }
 
     // 8. Generar PDF del contrato
-    console.log('📄 [API] Generando PDF...')
+    console.log('📑 [API] Generando PDF...')
     let pdfUrl = null
 
     try {
-      const { generateCoachContractPDF } = await import('@/lib/pdf/contractGenerator')
+      // Importar función de generación de PDF
+      const { generateCoachContractPDF } = await import('@/lib/pdf/contract-generator')
       
-      let contenidoTemplate = ''
-      
-      if (formData.template_id) {
-        const { data: template } = await supabase
-          .from('contract_templates')
-          .select('contenido')
-          .eq('id', formData.template_id)
-          .single()
-        
-        if (template) {
-          contenidoTemplate = template.contenido
-            .replace(/\{nombre\}/g, formData.nombre)
-            .replace(/\{apellidos\}/g, formData.apellidos)
-            .replace(/\{fecha_inicio\}/g, new Date().toLocaleDateString('es-MX', { 
-              year: 'numeric', month: 'long', day: 'numeric' 
-            }))
-            .replace(/\{tipo_contrato\}/g, 'Por Clase')
-        }
-      }
-
-      if (!contenidoTemplate) {
-        contenidoTemplate = `CONTRATO DE PRESTACIÓN DE SERVICIOS PROFESIONALES
-
-Entre STRIVE STUDIO y ${formData.nombre} ${formData.apellidos}, se celebra el presente contrato.
-
-I. OBJETO
-Impartir clases de cycling según horario acordado.
-
-II. COMPENSACIÓN
-Pago por clase impartida.
-
-III. ACEPTACIÓN
-Al firmar, el coach acepta todos los términos.`
-      }
-      
-      const pdfBlob = await generateCoachContractPDF({
-        coach: {
-          nombre: formData.nombre,
-          apellidos: formData.apellidos,
-          email: formData.email,
-          telefono: formData.telefono,
-          rfc: formData.rfc
-        },
-        contrato: {
-          tipo_contrato: 'por_clase',
-          fecha_inicio: new Date().toISOString(),
-          fecha_firma: new Date().toISOString()
-        },
-        contenidoTemplate,
-        firmaEmbebida: formData.firma_digital
+      const pdfBuffer = await generateCoachContractPDF({
+        contenido: contenidoContrato,
+        firmaBase64: formData.firma_digital,
+        nombreCompleto: `${formData.nombre} ${formData.apellidos}`,
+        fecha: new Date().toLocaleDateString('es-MX')
       })
 
-      const pdfPath = `contracts/${userId}/${Date.now()}_contrato.pdf`
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(pdfPath, pdfBlob, {
+      // Subir PDF a storage
+      const pdfFileName = `${userId}/contrato-${Date.now()}.pdf`
+      const { error: uploadPdfError } = await supabase.storage
+        .from('contracts')
+        .upload(pdfFileName, pdfBuffer, {
           contentType: 'application/pdf',
           upsert: false
         })
 
-      if (!uploadError) {
-        const { data: urlData } = supabase.storage
-          .from('documents')
-          .getPublicUrl(pdfPath)
-        pdfUrl = urlData.publicUrl
-        console.log('✅ [API] PDF generado')
-      }
+      if (uploadPdfError) throw uploadPdfError
+
+      const { data: pdfPublicData } = supabase.storage
+        .from('contracts')
+        .getPublicUrl(pdfFileName)
+
+      pdfUrl = pdfPublicData.publicUrl
+      console.log('✅ [API] PDF generado y subido')
     } catch (pdfError) {
-      console.error('⚠️ Error generando PDF:', pdfError)
+      console.error('⚠️ [API] Error generando PDF:', pdfError)
+      // Continuar sin PDF si falla
     }
 
-    // 9. Crear contrato
+    // 9. Crear registro de contrato
     console.log('📄 [API] Creando contrato...')
+    const hashDocumento = crypto.createHash('sha256')
+      .update(contenidoContrato + formData.firma_digital)
+      .digest('hex')
+
     await supabase
       .from('coach_contracts')
       .insert({
         coach_id: userId,
-        template_id: formData.template_id || null,
+        template_id: template?.id || null,
         tipo_contrato: 'por_clase',
         fecha_inicio: new Date().toISOString().split('T')[0],
         estado: 'activo',
         firmado: true,
         fecha_firma: new Date().toISOString(),
-        firma_embebida: formData.firma_digital,
+        firma_digital: formData.firma_digital,
+        hash_documento: hashDocumento,
         vigente: true,
         version: 1,
-        documento_url: pdfUrl
+        documento_url: pdfUrl,
+        ip_firma: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+        user_agent_firma: request.headers.get('user-agent')
       })
+
+    console.log('✅ [API] Contrato creado')
 
     // 10. Marcar invitación como usada
     await supabase
