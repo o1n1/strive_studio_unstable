@@ -57,21 +57,17 @@ export default function Step8FirmaContrato({ data, updateData, prevStep, invitac
 
       if (error) {
         console.error('❌ [ONBOARDING] Error cargando template:', error)
-        console.log('📄 [ONBOARDING] Usando contrato fallback')
         setContratoTexto(getContratoFallback())
         setTemplateId(null)
       } else if (!template) {
         console.warn('⚠️ [ONBOARDING] No se encontró template activo')
-        console.log('📄 [ONBOARDING] Usando contrato fallback')
         setContratoTexto(getContratoFallback())
         setTemplateId(null)
       } else {
         console.log('✅ [ONBOARDING] Template cargado:', template.nombre)
-        console.log('📝 [ONBOARDING] Template ID:', template.id)
         setTemplateId(template.id)
         const textoPersonalizado = reemplazarVariables(template.contenido)
         setContratoTexto(textoPersonalizado)
-        console.log('✅ [ONBOARDING] Variables reemplazadas correctamente')
       }
     } catch (error) {
       console.error('❌ [ONBOARDING] Error general:', error)
@@ -91,12 +87,6 @@ export default function Step8FirmaContrato({ data, updateData, prevStep, invitac
       day: 'numeric' 
     })
     const tipoContrato = 'Por Clase'
-
-    console.log('🔄 [ONBOARDING] Reemplazando variables:')
-    console.log('  - {nombre}:', nombre)
-    console.log('  - {apellidos}:', apellidos)
-    console.log('  - {fecha_inicio}:', fechaInicio)
-    console.log('  - {tipo_contrato}:', tipoContrato)
 
     return plantilla
       .replace(/\{nombre\}/g, nombre)
@@ -143,6 +133,36 @@ Al firmar este contrato, EL INSTRUCTOR/COACH acepta haber leído, comprendido y 
 Fecha de inicio: ${fechaInicio}
 Categoría: ${categoria}
 Tipo de compensación: Por Clase`
+  }
+
+  const comprimirImagen = async (base64, maxWidth = 400, quality = 0.6) => {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+        
+        let width = img.width
+        let height = img.height
+        
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width
+          width = maxWidth
+        }
+        
+        canvas.width = width
+        canvas.height = height
+        ctx.drawImage(img, 0, 0, width, height)
+        
+        const compressed = canvas.toDataURL('image/jpeg', quality)
+        const originalSize = (base64.length / 1024).toFixed(0)
+        const compressedSize = (compressed.length / 1024).toFixed(0)
+        
+        console.log(`🗜️ Firma comprimida: ${originalSize}KB → ${compressedSize}KB`)
+        resolve(compressed)
+      }
+      img.src = base64
+    })
   }
 
   const getCoordinates = (e, canvas) => {
@@ -204,12 +224,13 @@ Tipo de compensación: Por Clase`
     setErrors(newErrors)
   }
 
-  const guardarFirma = () => {
+  const guardarFirma = async () => {
     if (!hasSignature) return
     
     const canvas = canvasRef.current
     const firmaDataURL = canvas.toDataURL('image/png')
-    updateData({ firma_digital: firmaDataURL })
+    const firmaComprimida = await comprimirImagen(firmaDataURL, 400, 0.6)
+    updateData({ firma_digital: firmaComprimida })
   }
 
   const validateForm = () => {
@@ -231,7 +252,7 @@ Tipo de compensación: Por Clase`
     e.preventDefault()
 
     if (hasSignature && !data.firma_digital) {
-      guardarFirma()
+      await guardarFirma()
     }
 
     if (!validateForm()) {
@@ -242,8 +263,29 @@ Tipo de compensación: Por Clase`
     setLoading(true)
 
     try {
+      console.log('📤 [ONBOARDING] Comprimiendo imágenes antes de enviar...')
+      
+      // Comprimir todas las imágenes
+      const formDataComprimido = { ...data }
+      
+      if (formDataComprimido.foto_perfil?.startsWith('data:image')) {
+        formDataComprimido.foto_perfil = await comprimirImagen(formDataComprimido.foto_perfil, 512, 0.7)
+      }
+      
+      if (formDataComprimido.ine_frente?.startsWith('data:image')) {
+        formDataComprimido.ine_frente = await comprimirImagen(formDataComprimido.ine_frente, 1024, 0.7)
+      }
+      
+      if (formDataComprimido.ine_reverso?.startsWith('data:image')) {
+        formDataComprimido.ine_reverso = await comprimirImagen(formDataComprimido.ine_reverso, 1024, 0.7)
+      }
+      
+      if (formDataComprimido.comprobante_domicilio?.startsWith('data:image')) {
+        formDataComprimido.comprobante_domicilio = await comprimirImagen(formDataComprimido.comprobante_domicilio, 1024, 0.7)
+      }
+      
+      console.log('✅ [ONBOARDING] Imágenes comprimidas')
       console.log('📤 [ONBOARDING] Enviando formulario...')
-      console.log('📝 [ONBOARDING] Template ID:', templateId)
       
       const response = await fetch('/api/coaches/complete-onboarding', {
         method: 'POST',
@@ -251,7 +293,7 @@ Tipo de compensación: Por Clase`
         body: JSON.stringify({
           token,
           formData: {
-            ...data,
+            ...formDataComprimido,
             template_id: templateId
           },
           invitacionId: invitacion.id
@@ -473,7 +515,7 @@ Tipo de compensación: Por Clase`
           {loading ? (
             <span className="flex items-center justify-center gap-2">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-              Enviando...
+              Comprimiendo y enviando...
             </span>
           ) : (
             'Enviar Solicitud'
