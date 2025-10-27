@@ -99,44 +99,168 @@ export const POST = withAuth(
         case 'aprobacion':
           subject = `¡Bienvenido a ${STUDIO_NAME}!`
           htmlContent = `
-            <h1>¡Felicidades ${coachData.nombre}!</h1>
-            <p>Tu solicitud para ser coach en ${STUDIO_NAME} ha sido <strong>aprobada</strong>.</p>
-            <p>Ya puedes acceder a tu panel de coach e impartir clases.</p>
-            <p><a href="${STUDIO_URL}/login">Iniciar sesión</a></p>
-            <br>
-            <p>Saludos,<br>Equipo de ${STUDIO_NAME}</p>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; background: #0A0A0A; color: #FFFCF3; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 0 auto; background: #0A0A0A; }
+    .header { background: linear-gradient(135deg, #AE3F21 0%, #9C7A5E 100%); padding: 40px 20px; text-align: center; }
+    .content { padding: 40px 20px; }
+    .button { display: inline-block; background: #AE3F21; color: #FFFCF3; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="color: #FFFCF3; margin: 0;">¡Felicidades!</h1>
+    </div>
+    <div class="content">
+      <h2>Hola ${coachData.nombre},</h2>
+      <p>Tu solicitud para ser coach en <strong>${STUDIO_NAME}</strong> ha sido <strong style="color: #10b981;">APROBADA</strong>.</p>
+      <p>Ya puedes acceder a tu panel de coach e impartir clases.</p>
+      <p style="text-align: center;">
+        <a href="${STUDIO_URL}/coach/dashboard" class="button">Acceder a mi Panel</a>
+      </p>
+      <p>Saludos,<br><strong>Equipo de ${STUDIO_NAME}</strong></p>
+    </div>
+  </div>
+</body>
+</html>
           `
-          textContent = `¡Felicidades ${coachData.nombre}! Tu solicitud ha sido aprobada. Accede en: ${STUDIO_URL}/login`
+          textContent = `¡Felicidades ${coachData.nombre}! Tu solicitud ha sido aprobada. Accede en: ${STUDIO_URL}/coach/dashboard`
           break
 
         case 'rechazo':
           subject = `Actualización de tu solicitud en ${STUDIO_NAME}`
           htmlContent = `
-            <h1>Hola ${coachData.nombre},</h1>
-            <p>Lamentamos informarte que tu solicitud para ser coach en ${STUDIO_NAME} no ha sido aprobada.</p>
-            <p><strong>Motivo:</strong> ${motivo}</p>
-            <p>Si tienes preguntas, no dudes en contactarnos.</p>
-            <br>
-            <p>Saludos,<br>Equipo de ${STUDIO_NAME}</p>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; background: #0A0A0A; color: #FFFCF3; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 0 auto; background: #0A0A0A; }
+    .header { background: linear-gradient(135deg, #353535 0%, #1a1a1a 100%); padding: 40px 20px; text-align: center; }
+    .content { padding: 40px 20px; }
+    .alert-box { background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="color: #FFFCF3; margin: 0;">Actualización de Solicitud</h1>
+    </div>
+    <div class="content">
+      <h2>Hola ${coachData.nombre},</h2>
+      <p>Lamentamos informarte que tu solicitud para ser coach en ${STUDIO_NAME} no ha sido aprobada en este momento.</p>
+      <div class="alert-box">
+        <p style="margin: 0;"><strong>Motivo:</strong> ${motivo}</p>
+      </div>
+      <p>Si tienes preguntas, no dudes en contactarnos a <strong>strive.studio99@gmail.com</strong></p>
+      <p>Saludos,<br><strong>Equipo de ${STUDIO_NAME}</strong></p>
+    </div>
+  </div>
+</body>
+</html>
           `
-          textContent = `Hola ${coachData.nombre}, tu solicitud no ha sido aprobada. Motivo: ${motivo}`
+          textContent = `Hola ${coachData.nombre}, tu solicitud no ha sido aprobada.\n\nMotivo: ${motivo}\n\nContacto: strive.studio99@gmail.com`
           break
 
         case 'correcciones':
-          const listaCorrecciones = correcciones.map(c => `<li>${c}</li>`).join('')
-          const listaCorreccionesTexto = correcciones.map(c => `- ${c}`).join('\n')
+          // ✅ CORRECCIÓN: Manejar correcciones como strings o objetos
+          let listaCorrecciones = ''
+          let listaCorreccionesTexto = ''
+          
+          if (Array.isArray(correcciones)) {
+            listaCorrecciones = correcciones
+              .map(c => {
+                // Si es string, usar directamente
+                if (typeof c === 'string') {
+                  return `<li style="margin-bottom: 10px;">${c}</li>`
+                }
+                // Si es objeto, extraer el texto o mensaje
+                if (typeof c === 'object' && c !== null) {
+                  const texto = c.texto || c.mensaje || c.descripcion || c.correccion || JSON.stringify(c)
+                  return `<li style="margin-bottom: 10px;">${texto}</li>`
+                }
+                return `<li style="margin-bottom: 10px;">${String(c)}</li>`
+              })
+              .join('')
+            
+            listaCorreccionesTexto = correcciones
+              .map((c, index) => {
+                if (typeof c === 'string') {
+                  return `${index + 1}. ${c}`
+                }
+                if (typeof c === 'object' && c !== null) {
+                  const texto = c.texto || c.mensaje || c.descripcion || c.correccion || JSON.stringify(c)
+                  return `${index + 1}. ${texto}`
+                }
+                return `${index + 1}. ${String(c)}`
+              })
+              .join('\n')
+          } else {
+            // Si no es array, convertir a string
+            listaCorrecciones = `<li>${String(correcciones)}</li>`
+            listaCorreccionesTexto = String(correcciones)
+          }
           
           subject = `Correcciones necesarias en tu solicitud - ${STUDIO_NAME}`
           htmlContent = `
-            <h1>Hola ${coachData.nombre},</h1>
-            <p>Hemos revisado tu solicitud y necesitamos que realices las siguientes correcciones:</p>
-            <ul>${listaCorrecciones}</ul>
-            <p>Por favor, actualiza tu información y envía nuevamente tu solicitud.</p>
-            <p><a href="${STUDIO_URL}/login">Acceder a mi perfil</a></p>
-            <br>
-            <p>Saludos,<br>Equipo de ${STUDIO_NAME}</p>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; background: #0A0A0A; color: #FFFCF3; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 0 auto; background: #0A0A0A; }
+    .header { background: linear-gradient(135deg, #AE3F21 0%, #9C7A5E 100%); padding: 40px 20px; text-align: center; }
+    .content { padding: 40px 20px; }
+    .alert-box { background: rgba(251, 191, 36, 0.1); border-left: 4px solid #fbbf24; padding: 15px; margin: 20px 0; }
+    .button { display: inline-block; background: #AE3F21; color: #FFFCF3; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+    ul { margin: 15px 0; padding-left: 20px; }
+    li { margin-bottom: 10px; color: #B39A72; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="color: #FFFCF3; margin: 0;">Correcciones Necesarias</h1>
+    </div>
+    <div class="content">
+      <h2>Hola ${coachData.nombre},</h2>
+      <p>Hemos revisado tu solicitud y necesitamos que realices las siguientes correcciones:</p>
+      <div class="alert-box">
+        <ul>
+          ${listaCorrecciones}
+        </ul>
+      </div>
+      <p>Por favor, accede a tu perfil para revisar y actualizar la información solicitada.</p>
+      <p style="text-align: center;">
+        <a href="${STUDIO_URL}/coach/perfil" class="button">Revisar y Corregir →</a>
+      </p>
+      <p style="color: #B39A72; font-size: 14px;">⚠️ <strong>Importante:</strong> Una vez realices las correcciones, nuestro equipo las revisará nuevamente.</p>
+      <p>Saludos,<br><strong>Equipo de ${STUDIO_NAME}</strong></p>
+    </div>
+  </div>
+</body>
+</html>
           `
-          textContent = `Hola ${coachData.nombre}, correcciones necesarias:\n${listaCorreccionesTexto}\n\nAccede en: ${STUDIO_URL}/login`
+          textContent = `Hola ${coachData.nombre},
+
+Hemos revisado tu solicitud y necesitamos las siguientes correcciones:
+
+${listaCorreccionesTexto}
+
+Por favor, accede a tu perfil para revisar y actualizar la información:
+${STUDIO_URL}/coach/perfil
+
+⚠️ Importante: Una vez realices las correcciones, nuestro equipo las revisará nuevamente.
+
+Saludos,
+Equipo de ${STUDIO_NAME}`
           break
       }
 
@@ -151,7 +275,7 @@ export const POST = withAuth(
             'Authorization': `Bearer ${RESEND_API_KEY}`
           },
           body: JSON.stringify({
-            from: FROM_EMAIL,
+            from: `${STUDIO_NAME} <${FROM_EMAIL}>`,
             to: coachData.email,
             subject: subject,
             html: htmlContent,
