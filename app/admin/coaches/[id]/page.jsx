@@ -148,8 +148,14 @@ export default function CoachDetailPage() {
       })
       
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Error al generar PDF')
+        let errorMsg = 'Error al generar PDF'
+        try {
+          const error = await response.json()
+          errorMsg = error.error || errorMsg
+        } catch {
+          errorMsg = `Error ${response.status}: ${response.statusText}`
+        }
+        throw new Error(errorMsg)
       }
 
       const blob = await response.blob()
