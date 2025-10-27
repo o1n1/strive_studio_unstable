@@ -40,32 +40,41 @@ export default function Step8FirmaContrato({ data, updateData, prevStep, invitac
   const cargarPlantillaContrato = async () => {
     setLoadingPlantilla(true)
     try {
+      console.log('🔍 [ONBOARDING] Cargando template activo...')
       const { createClient } = await import('@supabase/supabase-js')
       const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       )
 
-      // Obtener template por defecto para tipo "por_clase"
       const { data: template, error } = await supabase
         .from('contract_templates')
-        .select('id, contenido')
+        .select('id, contenido, nombre')
         .eq('tipo_contrato', 'por_clase')
         .eq('vigente', true)
         .eq('es_default', true)
         .single()
 
-      if (error || !template) {
-        console.error('Error cargando template:', error)
+      if (error) {
+        console.error('❌ [ONBOARDING] Error cargando template:', error)
+        console.log('📄 [ONBOARDING] Usando contrato fallback')
+        setContratoTexto(getContratoFallback())
+        setTemplateId(null)
+      } else if (!template) {
+        console.warn('⚠️ [ONBOARDING] No se encontró template activo')
+        console.log('📄 [ONBOARDING] Usando contrato fallback')
         setContratoTexto(getContratoFallback())
         setTemplateId(null)
       } else {
+        console.log('✅ [ONBOARDING] Template cargado:', template.nombre)
+        console.log('📝 [ONBOARDING] Template ID:', template.id)
         setTemplateId(template.id)
         const textoPersonalizado = reemplazarVariables(template.contenido)
         setContratoTexto(textoPersonalizado)
+        console.log('✅ [ONBOARDING] Variables reemplazadas correctamente')
       }
     } catch (error) {
-      console.error('Error:', error)
+      console.error('❌ [ONBOARDING] Error general:', error)
       setContratoTexto(getContratoFallback())
       setTemplateId(null)
     } finally {
@@ -74,24 +83,26 @@ export default function Step8FirmaContrato({ data, updateData, prevStep, invitac
   }
 
   const reemplazarVariables = (plantilla) => {
-    const nombreCompleto = `${data.nombre || ''} ${data.apellidos || ''}`.trim() || '[Nombre del Coach]'
+    const nombre = data.nombre || '[Nombre]'
+    const apellidos = data.apellidos || '[Apellidos]'
     const fechaInicio = new Date().toLocaleDateString('es-MX', { 
       year: 'numeric', 
       month: 'long', 
       day: 'numeric' 
     })
-    const fechaFirma = new Date().toLocaleDateString('es-MX', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    })
-    const categoria = invitacion?.categoria || 'No especificada'
+    const tipoContrato = 'Por Clase'
+
+    console.log('🔄 [ONBOARDING] Reemplazando variables:')
+    console.log('  - {nombre}:', nombre)
+    console.log('  - {apellidos}:', apellidos)
+    console.log('  - {fecha_inicio}:', fechaInicio)
+    console.log('  - {tipo_contrato}:', tipoContrato)
 
     return plantilla
-      .replace(/\{\{nombre_completo\}\}/g, nombreCompleto)
-      .replace(/\{\{fecha_inicio\}\}/g, fechaInicio)
-      .replace(/\{\{fecha_firma\}\}/g, fechaFirma)
-      .replace(/\{\{categoria\}\}/g, categoria)
+      .replace(/\{nombre\}/g, nombre)
+      .replace(/\{apellidos\}/g, apellidos)
+      .replace(/\{fecha_inicio\}/g, fechaInicio)
+      .replace(/\{tipo_contrato\}/g, tipoContrato)
   }
 
   const getContratoFallback = () => {
@@ -231,6 +242,9 @@ Tipo de compensación: Por Clase`
     setLoading(true)
 
     try {
+      console.log('📤 [ONBOARDING] Enviando formulario...')
+      console.log('📝 [ONBOARDING] Template ID:', templateId)
+      
       const response = await fetch('/api/coaches/complete-onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -250,10 +264,11 @@ Tipo de compensación: Por Clase`
         throw new Error(result.error || 'Error al completar registro')
       }
 
+      console.log('✅ [ONBOARDING] Registro completado exitosamente')
       window.location.href = '/onboarding/exito'
       
     } catch (error) {
-      console.error('Error:', error)
+      console.error('❌ [ONBOARDING] Error:', error)
       setErrors({ submit: error.message || 'Error al guardar. Intenta de nuevo.' })
       setLoading(false)
     }
