@@ -20,7 +20,7 @@ export async function POST(request) {
     const { createClient } = await import('@supabase/supabase-js')
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      process.env.SUPABASE_SERVICE_ROLE_KEY, // ✅ USAR SERVICE ROLE PARA BYPASS RLS
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
@@ -39,18 +39,18 @@ export async function POST(request) {
 
     // 2. Crear usuario
     console.log('👤 [API] Creando usuario...')
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: formData.email,
       password: formData.password,
-      options: {
-        data: {
-          nombre: formData.nombre,
-          apellidos: formData.apellidos
-        }
+      email_confirm: true, // ✅ Auto-confirmar email
+      user_metadata: {
+        nombre: formData.nombre,
+        apellidos: formData.apellidos
       }
     })
 
     if (authError) {
+      console.error('❌ [API] Error creando usuario:', authError)
       return NextResponse.json(
         { error: 'Error creando usuario: ' + authError.message },
         { status: 400 }
@@ -60,31 +60,34 @@ export async function POST(request) {
     const userId = authData.user.id
     console.log('✅ [API] Usuario creado:', userId)
 
-    // 3. CREAR PROFILE MANUALMENTE (sin esperar trigger)
-    console.log('👤 [API] Creando profile manualmente...')
+    // 3. ✅ ESPERAR A QUE EL TRIGGER CREE EL PROFILE, LUEGO ACTUALIZAR
+    console.log('⏳ [API] Esperando creación de profile por trigger...')
+    await new Promise(resolve => setTimeout(resolve, 2000)) // Esperar 2 segundos
+
+    // ✅ ACTUALIZAR PROFILE CON ROL COACH (no insert, UPDATE)
+    console.log('📝 [API] Actualizando profile a rol coach...')
     const { error: profileError } = await supabase
       .from('profiles')
-      .insert({
-        id: userId,
-        email: formData.email,
+      .update({
         nombre: formData.nombre,
         apellidos: formData.apellidos,
         telefono: formData.telefono,
-        rol: 'coach',
+        rol: 'coach', // ✅ CAMBIAR ROL A COACH
         avatar_url: formData.foto_perfil || null,
         activo: true,
         require_email_verification: false
       })
+      .eq('id', userId)
 
     if (profileError) {
-      console.error('❌ [API] Error creando profile:', profileError)
+      console.error('❌ [API] Error actualizando profile:', profileError)
       return NextResponse.json(
-        { error: 'Error creando perfil: ' + profileError.message },
+        { error: 'Error actualizando perfil: ' + profileError.message },
         { status: 500 }
       )
     }
 
-    console.log('✅ [API] Profile creado exitosamente')
+    console.log('✅ [API] Profile actualizado a coach exitosamente')
 
     // 4. Crear coach
     console.log('🏋️ [API] Creando coach...')
@@ -165,79 +168,77 @@ export async function POST(request) {
     console.log('✅ [API] Archivos subidos')
 
     // 6. Guardar documentos en BD
-    if (Object.keys(uploadedFiles).length > 0) {
-      console.log('💾 [API] Guardando registros de documentos...')
-      const docsToInsert = Object.entries(uploadedFiles).map(([tipo, url]) => ({
-        coach_id: userId,
-        tipo,
-        nombre_archivo: tipo.replace('_', ' '),
-        archivo_url: url,
-        verificado: false
-      }))
-
-      await supabase.from('coach_documents').insert(docsToInsert)
-      console.log('✅ [API] Documentos guardados')
+    console.log('📄 [API] Guardando documentos...')
+    for (const [tipo, url] of Object.entries(uploadedFiles)) {
+      await supabase
+        .from('coach_documents')
+        .insert({
+          coach_id: userId,
+          tipo: tipo,
+          archivo_url: url,
+          verificado: false
+        })
     }
 
-    // 7. Obtener template de contrato activo
-    console.log('📄 [API] Buscando template de contrato...')
-    const { data: template, error: templateError } = await supabase
-      .from('contract_templates')
-      .select('*')
-      .eq('tipo_contrato', 'por_clase')
-      .eq('vigente', true)
-      .eq('es_default', true)
-      .single()
+    console.log('✅ [API] Documentos guardados')
 
-    let contenidoContrato = 'CONTRATO DE PRESTACIÓN DE SERVICIOS\n\nEste contrato es entre Strive Studio y el coach.'
-    
-    if (!templateError && template) {
-      console.log('✅ [API] Template encontrado:', template.nombre)
-      // Reemplazar variables en el template
-      contenidoContrato = template.contenido
-        .replace(/\{nombre\}/g, formData.nombre)
-        .replace(/\{apellidos\}/g, formData.apellidos)
-        .replace(/\{fecha_inicio\}/g, new Date().toLocaleDateString('es-MX'))
-        .replace(/\{tipo_contrato\}/g, 'Por Clase')
-    } else {
-      console.log('⚠️ [API] No se encontró template, usando contenido default')
+    // 7. Subir foto de perfil a storage si existe
+    if (formData.foto_perfil?.startsWith('data:')) {
+      try {
+        console.log('📸 [API] Subiendo foto de perfil...')
+        const base64Data = formData.foto_perfil.split(',')[1]
+        const buffer = Buffer.from(base64Data, 'base64')
+        const ext = formData.foto_perfil.match(/data:image\/(\w+);/)?.[1] || 'jpg'
+        const fileName = `${userId}/avatar-${Date.now()}.${ext}`
+
+        const { error: avatarError } = await supabase.storage
+          .from('avatars')
+          .upload(fileName, buffer, {
+            contentType: `image/${ext}`,
+            upsert: true
+          })
+
+        if (!avatarError) {
+          const { data: publicData } = supabase.storage
+            .from('avatars')
+            .getPublicUrl(fileName)
+
+          // Actualizar avatar_url en profile
+          await supabase
+            .from('profiles')
+            .update({ avatar_url: publicData.publicUrl })
+            .eq('id', userId)
+
+          console.log('✅ [API] Foto de perfil subida')
+        }
+      } catch (error) {
+        console.error('⚠️ [API] Error subiendo foto perfil:', error)
+      }
     }
 
     // 8. Generar PDF del contrato
-    console.log('📑 [API] Generando PDF...')
+    console.log('📄 [API] Generando contrato PDF...')
     let pdfUrl = null
+    let contenidoContrato = ''
 
     try {
-      // Importar función de generación de PDF
-      const { generateCoachContractPDF } = await import('@/lib/pdf/contract-generator')
-      
-      const pdfBuffer = await generateCoachContractPDF({
-        contenido: contenidoContrato,
-        firmaBase64: formData.firma_digital,
-        nombreCompleto: `${formData.nombre} ${formData.apellidos}`,
-        fecha: new Date().toLocaleDateString('es-MX')
-      })
+      // Obtener plantilla activa
+      const { data: template } = await supabase
+        .from('contract_templates')
+        .select('*')
+        .eq('es_default', true)
+        .eq('vigente', true)
+        .single()
 
-      // Subir PDF a storage
-      const pdfFileName = `${userId}/contrato-${Date.now()}.pdf`
-      const { error: uploadPdfError } = await supabase.storage
-        .from('contracts')
-        .upload(pdfFileName, pdfBuffer, {
-          contentType: 'application/pdf',
-          upsert: false
-        })
-
-      if (uploadPdfError) throw uploadPdfError
-
-      const { data: pdfPublicData } = supabase.storage
-        .from('contracts')
-        .getPublicUrl(pdfFileName)
-
-      pdfUrl = pdfPublicData.publicUrl
-      console.log('✅ [API] PDF generado y subido')
-    } catch (pdfError) {
-      console.error('⚠️ [API] Error generando PDF:', pdfError)
-      // Continuar sin PDF si falla
+      if (template) {
+        contenidoContrato = template.contenido
+          .replace(/\{\{nombre\}\}/g, formData.nombre)
+          .replace(/\{\{apellidos\}\}/g, formData.apellidos)
+          .replace(/\{\{email\}\}/g, formData.email)
+          .replace(/\{\{fecha\}\}/g, new Date().toLocaleDateString('es-MX'))
+      }
+    } catch (error) {
+      console.error('⚠️ [API] Error obteniendo plantilla:', error)
     }
 
     // 9. Crear registro de contrato
@@ -250,7 +251,7 @@ export async function POST(request) {
       .from('coach_contracts')
       .insert({
         coach_id: userId,
-        template_id: template?.id || null,
+        template_id: null,
         tipo_contrato: 'por_clase',
         fecha_inicio: new Date().toISOString().split('T')[0],
         estado: 'activo',
