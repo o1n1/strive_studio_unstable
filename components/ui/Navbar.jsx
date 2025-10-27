@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Home, LogOut, Menu, X, User, ChevronDown } from 'lucide-react'
 import { useUser } from '@/hooks/useUser'
 import { logoutUser } from '@/lib/supabase/auth'
+import NotificacionesPanel from '@/components/NotificacionesPanel'
 
 export default function Navbar() {
   const router = useRouter()
@@ -75,6 +76,9 @@ export default function Navbar() {
 
         {/* Desktop Menu */}
         <div className="hidden md:flex items-center gap-4">
+          {/* Panel Notificaciones */}
+          {profile && <NotificacionesPanel />}
+
           <Link href={getDashboardUrl()}>
             <button
               className="flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition-all hover:opacity-80"
