@@ -309,12 +309,54 @@ export async function POST(request) {
       }
     }
 
-    // 8. Generar PDF del contrato
+    // 8. Generar PDF del contrato con contenido de template
     console.log('📄 [API] Generando PDF del contrato...')
     let pdfUrl = null
-    
+
     try {
       const { generateCoachContractPDF } = await import('@/lib/pdf/contractGenerator')
+      
+      // Obtener contenido del template si existe template_id
+      let contenidoTemplate = ''
+      
+      if (formData.template_id) {
+        console.log('🔍 [API] Obteniendo template:', formData.template_id)
+        const { data: template, error: templateError } = await supabase
+          .from('contract_templates')
+          .select('contenido')
+          .eq('id', formData.template_id)
+          .single()
+        
+        if (!templateError && template) {
+          // Personalizar variables del template
+          const nombreCompleto = `${formData.nombre} ${formData.apellidos}`
+          const fechaInicio = new Date().toLocaleDateString('es-MX', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          })
+          const fechaFirma = new Date().toLocaleDateString('es-MX', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          })
+          const categoria = invitation?.categoria || 'No especificada'
+          
+          contenidoTemplate = template.contenido
+            .replace(/\{\{nombre_completo\}\}/g, nombreCompleto)
+            .replace(/\{\{fecha_inicio\}\}/g, fechaInicio)
+            .replace(/\{\{fecha_firma\}\}/g, fechaFirma)
+            .replace(/\{\{categoria\}\}/g, categoria)
+          
+          console.log('✅ [API] Template personalizado')
+        } else {
+          console.warn('⚠️ [API] No se pudo obtener template, usando fallback')
+          contenidoTemplate = getFallbackContent(formData, invitation)
+        }
+      } else {
+        console.log('ℹ️ [API] Sin template_id, usando contenido fallback')
+        contenidoTemplate = getFallbackContent(formData, invitation)
+      }
       
       const contratoTemp = {
         id: crypto.randomUUID(),
@@ -332,9 +374,11 @@ export async function POST(request) {
           rfc: formData.rfc
         },
         contrato: contratoTemp,
-        firmaDigital: formData.firma_digital
+        contenidoTemplate: contenidoTemplate,
+        firmaEmbebida: formData.firma_digital // Firma en base64
       })
 
+      // Subir PDF a storage
       const pdfPath = `contracts/${userId}/${Date.now()}_contrato_v1.pdf`
       const { error: uploadError } = await supabase.storage
         .from('documents')
@@ -354,6 +398,47 @@ export async function POST(request) {
       }
     } catch (pdfError) {
       console.error('⚠️ [API] Error generando PDF:', pdfError)
+    }
+
+    // Función helper para contenido fallback
+    function getFallbackContent(formData, invitation) {
+      const nombreCompleto = `${formData.nombre} ${formData.apellidos}`
+      const fechaInicio = new Date().toLocaleDateString('es-MX')
+      const categoria = invitation?.categoria || 'No especificada'
+      
+      return `CONTRATO DE PRESTACIÓN DE SERVICIOS PROFESIONALES
+
+    Entre STRIVE STUDIO (en adelante "EL ESTUDIO") y ${nombreCompleto} (en adelante "EL INSTRUCTOR/COACH"), se celebra el presente contrato bajo los siguientes términos:
+
+    I. OBJETO DEL CONTRATO
+    EL INSTRUCTOR/COACH prestará servicios profesionales de coaching deportivo en las instalaciones de EL ESTUDIO, impartiendo clases de ${categoria} según el horario acordado.
+
+    II. OBLIGACIONES DEL INSTRUCTOR/COACH
+    1. Impartir clases con profesionalismo, puntualidad y calidad excepcional.
+    2. Mantener vigentes todas las certificaciones profesionales requeridas.
+    3. Cumplir con los protocolos de seguridad e higiene del estudio.
+    4. Respetar la confidencialidad de información sensible de clientes y operaciones.
+
+    III. OBLIGACIONES DEL ESTUDIO
+    1. Proporcionar instalaciones adecuadas y equipamiento necesario.
+    2. Realizar pagos según lo acordado en tiempo y forma.
+    3. Cubrir seguros de responsabilidad civil durante las clases.
+
+    IV. COMPENSACIÓN
+    El pago se realizará según el esquema establecido (por clase, hora o mensual) acordado con la administración.
+
+    V. TERMINACIÓN
+    Cualquiera de las partes puede terminar este contrato con 15 días de anticipación mediante aviso por escrito.
+
+    VI. CONFIDENCIALIDAD
+    EL INSTRUCTOR/COACH se compromete a mantener confidencialidad sobre información sensible del negocio, clientes y operaciones del estudio.
+
+    VII. ACEPTACIÓN
+    Al firmar este contrato, EL INSTRUCTOR/COACH acepta haber leído, comprendido y estar de acuerdo con todos los términos establecidos.
+
+    Fecha de inicio: ${fechaInicio}
+    Categoría: ${categoria}
+    Tipo de compensación: Por Clase`
     }
 
     // 9. Crear registro de contrato con template_id y firma_embebida

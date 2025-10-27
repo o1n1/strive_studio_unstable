@@ -7,7 +7,6 @@ export default function Step8FirmaContrato({ data, updateData, prevStep, invitac
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
   const [loadingPlantilla, setLoadingPlantilla] = useState(true)
-  const [isSigning, setIsSigning] = useState(false)
   const [contratoTexto, setContratoTexto] = useState('')
   const [templateId, setTemplateId] = useState(null)
   const canvasRef = useRef(null)
@@ -28,7 +27,6 @@ export default function Step8FirmaContrato({ data, updateData, prevStep, invitac
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
 
-    // Si ya hay firma guardada, dibujarla
     if (data.firma_digital) {
       const img = new Image()
       img.onload = () => {
@@ -48,21 +46,20 @@ export default function Step8FirmaContrato({ data, updateData, prevStep, invitac
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       )
 
-      // Obtener template activo tipo 'coach'
+      // Obtener template por defecto para tipo "por_clase"
       const { data: template, error } = await supabase
         .from('contract_templates')
         .select('id, contenido')
-        .eq('tipo', 'coach')
-        .eq('activo', true)
+        .eq('tipo_contrato', 'por_clase')
+        .eq('vigente', true)
+        .eq('es_default', true)
         .single()
 
       if (error || !template) {
         console.error('Error cargando template:', error)
-        // Fallback: usar texto básico si no hay template
         setContratoTexto(getContratoFallback())
         setTemplateId(null)
       } else {
-        // Guardar template_id y personalizar contenido
         setTemplateId(template.id)
         const textoPersonalizado = reemplazarVariables(template.contenido)
         setContratoTexto(textoPersonalizado)
@@ -202,7 +199,6 @@ Tipo de compensación: Por Clase`
     const canvas = canvasRef.current
     const firmaDataURL = canvas.toDataURL('image/png')
     updateData({ firma_digital: firmaDataURL })
-    setIsSigning(false)
   }
 
   const validateForm = () => {
@@ -223,7 +219,6 @@ Tipo de compensación: Por Clase`
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    // Guardar firma antes de validar
     if (hasSignature && !data.firma_digital) {
       guardarFirma()
     }
@@ -236,7 +231,6 @@ Tipo de compensación: Por Clase`
     setLoading(true)
 
     try {
-      // Enviar formData con template_id
       const response = await fetch('/api/coaches/complete-onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -244,7 +238,7 @@ Tipo de compensación: Por Clase`
           token,
           formData: {
             ...data,
-            template_id: templateId // Enviar template_id al API
+            template_id: templateId
           },
           invitacionId: invitacion.id
         })
@@ -256,7 +250,6 @@ Tipo de compensación: Por Clase`
         throw new Error(result.error || 'Error al completar registro')
       }
 
-      // Redirigir a página de éxito
       window.location.href = '/onboarding/exito'
       
     } catch (error) {
