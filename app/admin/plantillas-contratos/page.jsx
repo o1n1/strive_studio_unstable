@@ -4,22 +4,19 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Card from '@/components/ui/Card'
-import { FileText, Plus, Edit2, Eye, Trash2, Save, X, AlertCircle } from 'lucide-react'
+import { FileText, Plus, Edit2, Check, Clock, Trash2, AlertCircle } from 'lucide-react'
 
 export default function PlantillasContratosPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [plantillas, setPlantillas] = useState([])
-  const [showModal, setShowModal] = useState(false)
+  const [tabActivo, setTabActivo] = useState('coaches') // coaches | staff
   const [editando, setEditando] = useState(null)
   const [formData, setFormData] = useState({
     nombre: '',
-    tipo_contrato: 'por_clase',
     contenido: '',
-    es_default: false,
-    notas: ''
+    categoria: 'coaches'
   })
-  const [errors, setErrors] = useState({})
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -83,60 +80,49 @@ export default function PlantillasContratosPage() {
     }
   }
 
-  const abrirModal = (plantilla = null) => {
-    if (plantilla) {
-      setEditando(plantilla.id)
-      setFormData({
-        nombre: plantilla.nombre,
-        tipo_contrato: plantilla.tipo_contrato,
-        contenido: plantilla.contenido,
-        es_default: plantilla.es_default,
-        notas: plantilla.notas || ''
-      })
-    } else {
-      setEditando(null)
-      setFormData({
-        nombre: '',
-        tipo_contrato: 'por_clase',
-        contenido: '',
-        es_default: false,
-        notas: ''
-      })
-    }
-    setErrors({})
-    setShowModal(true)
-  }
+  const plantillasCoaches = plantillas.filter(p => 
+    p.tipo_contrato === 'por_clase' || 
+    p.tipo_contrato === 'tiempo_completo' ||
+    p.tipo_contrato === 'medio_tiempo'
+  )
 
-  const cerrarModal = () => {
-    setShowModal(false)
-    setEditando(null)
+  const plantillasStaff = plantillas.filter(p => 
+    p.tipo_contrato === 'freelance'
+  )
+
+  const plantillasActuales = tabActivo === 'coaches' ? plantillasCoaches : plantillasStaff
+
+  const plantillaActiva = plantillasActuales.find(p => p.es_default && p.vigente)
+  const historial = plantillasActuales.filter(p => !(p.es_default && p.vigente))
+
+  const nuevaPlantilla = () => {
+    setEditando('nueva')
     setFormData({
       nombre: '',
-      tipo_contrato: 'por_clase',
       contenido: '',
-      es_default: false,
-      notas: ''
+      categoria: tabActivo
     })
-    setErrors({})
   }
 
-  const validarFormulario = () => {
-    const newErrors = {}
-
-    if (!formData.nombre.trim()) {
-      newErrors.nombre = 'El nombre es requerido'
-    }
-
-    if (!formData.contenido.trim()) {
-      newErrors.contenido = 'El contenido es requerido'
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+  const editarPlantilla = (plantilla) => {
+    setEditando(plantilla.id)
+    setFormData({
+      nombre: plantilla.nombre,
+      contenido: plantilla.contenido,
+      categoria: tabActivo
+    })
   }
 
-  const guardarPlantilla = async () => {
-    if (!validarFormulario()) return
+  const cancelar = () => {
+    setEditando(null)
+    setFormData({ nombre: '', contenido: '', categoria: 'coaches' })
+  }
+
+  const guardar = async () => {
+    if (!formData.nombre.trim() || !formData.contenido.trim()) {
+      alert('❌ Completa todos los campos')
+      return
+    }
 
     setSaving(true)
 
@@ -149,30 +135,21 @@ export default function PlantillasContratosPage() {
 
       const { data: { session } } = await supabase.auth.getSession()
 
-      const plantillaData = {
-        nombre: formData.nombre.trim(),
-        tipo_contrato: formData.tipo_contrato,
-        contenido: formData.contenido.trim(),
-        es_default: formData.es_default,
-        notas: formData.notas.trim() || null,
-        actualizado_por: session.user.id
-      }
+      // Determinar tipo_contrato según categoría
+      const tipo_contrato = tabActivo === 'coaches' ? 'por_clase' : 'freelance'
 
-      if (editando) {
-        // Actualizar plantilla existente
-        const { error } = await supabase
-          .from('contract_templates')
-          .update(plantillaData)
-          .eq('id', editando)
-
-        if (error) throw error
-
-        alert('✅ Plantilla actualizada correctamente')
-      } else {
+      if (editando === 'nueva') {
         // Crear nueva plantilla
-        plantillaData.creado_por = session.user.id
-        plantillaData.vigente = true
-        plantillaData.version = 1
+        const plantillaData = {
+          nombre: formData.nombre.trim(),
+          tipo_contrato,
+          contenido: formData.contenido.trim(),
+          vigente: true,
+          es_default: false,
+          version: 1,
+          creado_por: session.user.id,
+          actualizado_por: session.user.id
+        }
 
         const { error } = await supabase
           .from('contract_templates')
@@ -181,23 +158,76 @@ export default function PlantillasContratosPage() {
         if (error) throw error
 
         alert('✅ Plantilla creada correctamente')
+      } else {
+        // Actualizar plantilla existente
+        const plantillaData = {
+          nombre: formData.nombre.trim(),
+          contenido: formData.contenido.trim(),
+          actualizado_por: session.user.id,
+          updated_at: new Date().toISOString()
+        }
+
+        const { error } = await supabase
+          .from('contract_templates')
+          .update(plantillaData)
+          .eq('id', editando)
+
+        if (error) throw error
+
+        alert('✅ Plantilla actualizada correctamente')
       }
 
       await cargarPlantillas()
-      cerrarModal()
-
+      cancelar()
     } catch (error) {
-      console.error('Error guardando plantilla:', error)
+      console.error('Error guardando:', error)
       alert('❌ Error al guardar: ' + error.message)
     } finally {
       setSaving(false)
     }
   }
 
-  const eliminarPlantilla = async (id, nombre) => {
-    if (!confirm(`¿Estás seguro de eliminar la plantilla "${nombre}"?\n\nEsta acción no se puede deshacer.`)) {
-      return
+  const activarPlantilla = async (id) => {
+    if (!confirm('¿Activar esta plantilla? Será la que se use en el onboarding.')) return
+
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      )
+
+      // Determinar tipo_contrato según tab
+      const tipo_contrato = tabActivo === 'coaches' ? 'por_clase' : 'freelance'
+
+      // Desactivar todas las demás del mismo tipo
+      await supabase
+        .from('contract_templates')
+        .update({ es_default: false })
+        .eq('tipo_contrato', tipo_contrato)
+
+      // Activar la seleccionada
+      const { error } = await supabase
+        .from('contract_templates')
+        .update({ 
+          es_default: true, 
+          vigente: true,
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', id)
+
+      if (error) throw error
+
+      alert('✅ Plantilla activada')
+      await cargarPlantillas()
+    } catch (error) {
+      console.error('Error activando:', error)
+      alert('❌ Error al activar: ' + error.message)
     }
+  }
+
+  const eliminarPlantilla = async (id, nombre) => {
+    if (!confirm(`¿Eliminar "${nombre}"?\n\nEsta acción no se puede deshacer.`)) return
 
     try {
       const { createClient } = await import('@supabase/supabase-js')
@@ -215,33 +245,9 @@ export default function PlantillasContratosPage() {
 
       alert('✅ Plantilla eliminada')
       await cargarPlantillas()
-
     } catch (error) {
-      console.error('Error eliminando plantilla:', error)
+      console.error('Error eliminando:', error)
       alert('❌ Error al eliminar: ' + error.message)
-    }
-  }
-
-  const cambiarEstado = async (id, vigente) => {
-    try {
-      const { createClient } = await import('@supabase/supabase-js')
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      )
-
-      const { error } = await supabase
-        .from('contract_templates')
-        .update({ vigente: !vigente })
-        .eq('id', id)
-
-      if (error) throw error
-
-      await cargarPlantillas()
-
-    } catch (error) {
-      console.error('Error cambiando estado:', error)
-      alert('❌ Error al cambiar estado: ' + error.message)
     }
   }
 
@@ -257,274 +263,155 @@ export default function PlantillasContratosPage() {
 
   return (
     <DashboardLayout>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-            Plantillas de Contratos
-          </h1>
-          <p style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-            Gestiona las plantillas de contratos para todos los coaches
-          </p>
-        </div>
-        <button
-          onClick={() => abrirModal()}
-          className="px-6 py-3 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
-          style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}
-        >
-          <Plus size={20} />
-          Nueva Plantilla
-        </button>
-      </div>
-
-      {/* Info Box */}
-      <Card className="mb-6">
-        <div className="flex items-start gap-3">
-          <AlertCircle size={24} style={{ color: '#AE3F21' }} />
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <p className="font-semibold mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              Variables disponibles en el contenido:
-            </p>
-            <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-              <code style={{ background: 'rgba(174, 63, 33, 0.2)', padding: '2px 6px', borderRadius: '4px' }}>
-                {'{{nombre_completo}}'}, {'{{fecha_inicio}}'}, {'{{categoria}}'}, {'{{fecha_firma}}'}
-              </code>
-            </p>
-            <p className="text-xs mt-2" style={{ color: '#666', fontFamily: 'Montserrat, sans-serif' }}>
-              Estas variables se reemplazarán automáticamente con los datos reales del coach al generar el contrato.
+            <h1 className="text-3xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              Plantillas de Contratos
+            </h1>
+            <p style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+              Gestiona los contratos que se firman en el onboarding
             </p>
           </div>
+          <button
+            onClick={nuevaPlantilla}
+            className="px-6 py-3 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+            style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}
+          >
+            <Plus size={20} />
+            Nueva Plantilla
+          </button>
         </div>
-      </Card>
 
-      {/* Lista de Plantillas */}
-      <div className="space-y-4">
-        {plantillas.length === 0 ? (
-          <Card>
-            <div className="text-center py-12">
-              <FileText size={48} style={{ color: '#666' }} className="mx-auto mb-4" />
-              <p style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                No hay plantillas creadas
+        {/* Info Variables */}
+        <Card>
+          <div className="flex items-start gap-3">
+            <AlertCircle size={20} style={{ color: '#AE3F21' }} />
+            <div>
+              <p className="text-sm font-semibold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                Variables disponibles:
               </p>
+              <div className="flex flex-wrap gap-2">
+                {['{{nombre_completo}}', '{{fecha_inicio}}', '{{categoria}}', '{{fecha_firma}}'].map(v => (
+                  <code key={v} className="text-xs px-2 py-1 rounded" 
+                    style={{ background: 'rgba(174, 63, 33, 0.2)', color: '#AE3F21' }}>
+                    {v}
+                  </code>
+                ))}
+              </div>
             </div>
-          </Card>
-        ) : (
-          plantillas.map((plantilla) => (
-            <Card key={plantilla.id}>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                      {plantilla.nombre}
-                    </h3>
-                    {plantilla.es_default && (
-                      <span 
-                        className="text-xs px-3 py-1 rounded-full font-semibold"
-                        style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' }}
-                      >
-                        Por Defecto
-                      </span>
-                    )}
-                    <span 
-                      className="text-xs px-3 py-1 rounded-full font-semibold"
-                      style={{ 
-                        background: plantilla.vigente ? 'rgba(16, 185, 129, 0.2)' : 'rgba(156, 122, 94, 0.2)', 
-                        color: plantilla.vigente ? '#10b981' : '#9C7A5E' 
-                      }}
-                    >
-                      {plantilla.vigente ? '🟢 Vigente' : '⚪ Inactiva'}
-                    </span>
-                  </div>
+          </div>
+        </Card>
 
-                  <div className="flex items-center gap-4 text-sm mb-3" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                    <span>Tipo: <strong>{plantilla.tipo_contrato}</strong></span>
-                    <span>•</span>
-                    <span>Versión: <strong>{plantilla.version}</strong></span>
-                    <span>•</span>
-                    <span>Creada: <strong>{new Date(plantilla.created_at).toLocaleDateString('es-MX')}</strong></span>
-                  </div>
+        {/* Tabs */}
+        <div className="flex gap-2">
+          {['coaches', 'staff'].map(tab => (
+            <button
+              key={tab}
+              onClick={() => setTabActivo(tab)}
+              className="px-6 py-3 rounded-lg font-semibold transition-all"
+              style={{
+                background: tabActivo === tab ? '#AE3F21' : 'rgba(156, 122, 94, 0.2)',
+                color: tabActivo === tab ? '#FFFCF3' : '#B39A72',
+                fontFamily: 'Montserrat, sans-serif'
+              }}
+            >
+              {tab === 'coaches' ? 'Coaches' : 'Staff'}
+            </button>
+          ))}
+        </div>
 
-                  {plantilla.notas && (
-                    <p className="text-sm mb-3" style={{ color: '#666', fontFamily: 'Montserrat, sans-serif' }}>
-                      📝 {plantilla.notas}
-                    </p>
-                  )}
-
-                  <div 
-                    className="p-3 rounded-lg text-xs overflow-auto max-h-40"
-                    style={{ background: 'rgba(42, 42, 42, 0.8)', color: '#B39A72', fontFamily: 'monospace' }}
-                  >
-                    <pre className="whitespace-pre-wrap">{plantilla.contenido.substring(0, 300)}...</pre>
-                  </div>
+        {/* Plantilla Activa */}
+        {plantillaActiva && !editando && (
+          <Card>
+            <div className="flex items-start gap-4">
+              <div className="p-3 rounded-lg" style={{ background: 'rgba(16, 185, 129, 0.1)' }}>
+                <Check size={24} style={{ color: '#10b981' }} />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                    {plantillaActiva.nombre}
+                  </h3>
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold"
+                    style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' }}>
+                    ACTIVO
+                  </span>
                 </div>
-
-                <div className="flex items-center gap-2 ml-4">
+                <p className="text-sm mb-4" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Esta es la plantilla que se usa actualmente en el onboarding
+                </p>
+                <div className="p-4 rounded-lg mb-4 max-h-60 overflow-y-auto"
+                  style={{ background: 'rgba(42, 42, 42, 0.6)', border: '1px solid rgba(156, 122, 94, 0.2)' }}>
+                  <pre className="text-xs whitespace-pre-wrap" style={{ color: '#B39A72', fontFamily: 'monospace' }}>
+                    {plantillaActiva.contenido}
+                  </pre>
+                </div>
+                <div className="flex gap-2">
                   <button
-                    onClick={() => abrirModal(plantilla)}
-                    className="p-2 rounded-lg transition-all hover:opacity-80"
-                    style={{ background: 'rgba(174, 63, 33, 0.2)' }}
-                    title="Editar"
+                    onClick={() => editarPlantilla(plantillaActiva)}
+                    className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+                    style={{ background: 'rgba(174, 63, 33, 0.2)', color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}
                   >
-                    <Edit2 size={18} style={{ color: '#AE3F21' }} />
+                    <Edit2 size={16} />
+                    Editar
                   </button>
-
-                  <button
-                    onClick={() => cambiarEstado(plantilla.id, plantilla.vigente)}
-                    className="p-2 rounded-lg transition-all hover:opacity-80"
-                    style={{ background: 'rgba(156, 122, 94, 0.2)' }}
-                    title={plantilla.vigente ? 'Desactivar' : 'Activar'}
-                  >
-                    {plantilla.vigente ? (
-                      <Eye size={18} style={{ color: '#9C7A5E' }} />
-                    ) : (
-                      <Eye size={18} style={{ color: '#666' }} />
-                    )}
-                  </button>
-
-                  {!plantilla.es_default && (
-                    <button
-                      onClick={() => eliminarPlantilla(plantilla.id, plantilla.nombre)}
-                      className="p-2 rounded-lg transition-all hover:opacity-80"
-                      style={{ background: 'rgba(239, 68, 68, 0.2)' }}
-                      title="Eliminar"
-                    >
-                      <Trash2 size={18} style={{ color: '#ef4444' }} />
-                    </button>
-                  )}
                 </div>
               </div>
-            </Card>
-          ))
-        )}
-      </div>
-
-      {/* Modal de Edición/Creación */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={cerrarModal}>
-          <div 
-            className="rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto"
-            style={{ background: '#0A0A0A', border: '1px solid rgba(156, 122, 94, 0.2)' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                {editando ? 'Editar Plantilla' : 'Nueva Plantilla'}
-              </h2>
-              <button onClick={cerrarModal} className="p-2 hover:opacity-80 transition-all">
-                <X size={24} style={{ color: '#B39A72' }} />
-              </button>
             </div>
+          </Card>
+        )}
 
+        {/* Formulario de Edición */}
+        {editando && (
+          <Card>
+            <h3 className="text-xl font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              {editando === 'nueva' ? 'Nueva Plantilla' : 'Editar Plantilla'}
+            </h3>
+            
             <div className="space-y-4">
-              {/* Nombre */}
               <div>
-                <label className="block text-sm font-semibold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Nombre de la Plantilla *
+                <label className="block text-sm font-semibold mb-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Nombre de la Plantilla
                 </label>
                 <input
                   type="text"
                   value={formData.nombre}
                   onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                  placeholder="Ej: Contrato Por Clase 2025"
+                  placeholder="Ej: Contrato Coach Estándar v2"
                   className="w-full p-3 rounded-lg"
                   style={{
-                    background: 'rgba(255, 252, 243, 0.05)',
-                    border: errors.nombre ? '1px solid #ef4444' : '1px solid rgba(156, 122, 94, 0.3)',
-                    color: '#FFFCF3',
-                    fontFamily: 'Montserrat, sans-serif'
-                  }}
-                />
-                {errors.nombre && (
-                  <p className="text-xs mt-1" style={{ color: '#ef4444' }}>{errors.nombre}</p>
-                )}
-              </div>
-
-              {/* Tipo de Contrato */}
-              <div>
-                <label className="block text-sm font-semibold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Tipo de Contrato *
-                </label>
-                <select
-                  value={formData.tipo_contrato}
-                  onChange={(e) => setFormData({ ...formData, tipo_contrato: e.target.value })}
-                  className="w-full p-3 rounded-lg"
-                  style={{
-                    background: 'rgba(255, 252, 243, 0.05)',
+                    background: 'rgba(42, 42, 42, 0.6)',
                     border: '1px solid rgba(156, 122, 94, 0.3)',
                     color: '#FFFCF3',
                     fontFamily: 'Montserrat, sans-serif'
                   }}
-                >
-                  <option value="por_clase">Por Clase</option>
-                  <option value="tiempo_completo">Tiempo Completo</option>
-                  <option value="medio_tiempo">Medio Tiempo</option>
-                  <option value="freelance">Freelance</option>
-                </select>
+                />
               </div>
 
-              {/* Contenido */}
               <div>
-                <label className="block text-sm font-semibold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Contenido del Contrato *
+                <label className="block text-sm font-semibold mb-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Contenido del Contrato
                 </label>
                 <textarea
                   value={formData.contenido}
                   onChange={(e) => setFormData({ ...formData, contenido: e.target.value })}
-                  placeholder="Escribe aquí el contenido completo del contrato..."
-                  rows={15}
+                  placeholder="Escribe el contenido del contrato aquí..."
+                  rows={20}
                   className="w-full p-3 rounded-lg font-mono text-sm"
                   style={{
-                    background: 'rgba(255, 252, 243, 0.05)',
-                    border: errors.contenido ? '1px solid #ef4444' : '1px solid rgba(156, 122, 94, 0.3)',
+                    background: 'rgba(42, 42, 42, 0.6)',
+                    border: '1px solid rgba(156, 122, 94, 0.3)',
                     color: '#FFFCF3'
                   }}
                 />
-                {errors.contenido && (
-                  <p className="text-xs mt-1" style={{ color: '#ef4444' }}>{errors.contenido}</p>
-                )}
               </div>
 
-              {/* Notas */}
-              <div>
-                <label className="block text-sm font-semibold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                  Notas Internas (opcional)
-                </label>
-                <textarea
-                  value={formData.notas}
-                  onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
-                  placeholder="Notas sobre esta plantilla (solo visible para admins)"
-                  rows={2}
-                  className="w-full p-3 rounded-lg"
-                  style={{
-                    background: 'rgba(255, 252, 243, 0.05)',
-                    border: '1px solid rgba(156, 122, 94, 0.3)',
-                    color: '#FFFCF3',
-                    fontFamily: 'Montserrat, sans-serif'
-                  }}
-                />
-              </div>
-
-              {/* Checkbox Default */}
-              <div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.es_default}
-                    onChange={(e) => setFormData({ ...formData, es_default: e.target.checked })}
-                    className="w-4 h-4"
-                    style={{ accentColor: '#AE3F21' }}
-                  />
-                  <span className="text-sm" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                    Usar como plantilla por defecto para este tipo de contrato
-                  </span>
-                </label>
-              </div>
-
-              {/* Botones */}
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-3">
                 <button
-                  onClick={cerrarModal}
-                  className="flex-1 py-3 px-4 rounded-lg font-semibold transition-all hover:opacity-80"
+                  onClick={cancelar}
+                  className="flex-1 py-3 rounded-lg font-semibold transition-all hover:opacity-80"
                   style={{
                     background: 'rgba(156, 122, 94, 0.2)',
                     color: '#B39A72',
@@ -534,32 +421,93 @@ export default function PlantillasContratosPage() {
                   Cancelar
                 </button>
                 <button
-                  onClick={guardarPlantilla}
+                  onClick={guardar}
                   disabled={saving}
-                  className="flex-1 py-3 px-4 rounded-lg font-semibold transition-all hover:opacity-80 disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 py-3 rounded-lg font-semibold transition-all hover:opacity-80 disabled:opacity-50"
                   style={{
                     background: '#AE3F21',
                     color: '#FFFCF3',
                     fontFamily: 'Montserrat, sans-serif'
                   }}
                 >
-                  {saving ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <Save size={20} />
-                      Guardar Plantilla
-                    </>
-                  )}
+                  {saving ? 'Guardando...' : 'Guardar Plantilla'}
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </Card>
+        )}
+
+        {/* Historial */}
+        {!editando && historial.length > 0 && (
+          <Card>
+            <h3 className="text-lg font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+              <Clock size={20} className="inline mr-2" />
+              Historial de Versiones ({historial.length})
+            </h3>
+            <div className="space-y-3">
+              {historial.map(plantilla => (
+                <div key={plantilla.id} className="p-4 rounded-lg flex items-center justify-between"
+                  style={{ background: 'rgba(42, 42, 42, 0.4)', border: '1px solid rgba(156, 122, 94, 0.2)' }}>
+                  <div className="flex-1">
+                    <p className="font-semibold mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                      {plantilla.nombre}
+                    </p>
+                    <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                      Creada: {new Date(plantilla.created_at).toLocaleDateString('es-MX')}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => activarPlantilla(plantilla.id)}
+                      className="px-3 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-80"
+                      style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontFamily: 'Montserrat, sans-serif' }}
+                    >
+                      Activar
+                    </button>
+                    <button
+                      onClick={() => editarPlantilla(plantilla)}
+                      className="px-3 py-2 rounded-lg text-sm transition-all hover:opacity-80"
+                      style={{ background: 'rgba(174, 63, 33, 0.2)', color: '#AE3F21' }}
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button
+                      onClick={() => eliminarPlantilla(plantilla.id, plantilla.nombre)}
+                      className="px-3 py-2 rounded-lg text-sm transition-all hover:opacity-80"
+                      style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Empty State */}
+        {!plantillaActiva && !editando && historial.length === 0 && (
+          <Card>
+            <div className="text-center py-12">
+              <FileText size={48} className="mx-auto mb-4" style={{ color: '#B39A72' }} />
+              <h3 className="text-xl font-bold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                No hay plantillas de {tabActivo === 'coaches' ? 'coaches' : 'staff'}
+              </h3>
+              <p className="mb-6" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                Crea la primera plantilla para comenzar
+              </p>
+              <button
+                onClick={nuevaPlantilla}
+                className="px-6 py-3 rounded-lg font-semibold transition-all hover:opacity-80 inline-flex items-center gap-2"
+                style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}
+              >
+                <Plus size={20} />
+                Crear Plantilla
+              </button>
+            </div>
+          </Card>
+        )}
+      </div>
     </DashboardLayout>
   )
 }
