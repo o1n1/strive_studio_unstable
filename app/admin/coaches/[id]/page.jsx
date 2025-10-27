@@ -15,6 +15,7 @@ import { useProtectedRoute } from '@/hooks/useProtectedRoute'
 import DashboardSkeleton from '@/components/skeletons/DashboardSkeleton'
 import EditarContratoModal from '@/components/admin/EditarContratoModal'
 import ChecklistAprobacion from '@/components/admin/ChecklistAprobacion'
+import GestionDocumentosModal from '@/components/admin/GestionDocumentosModal'
 
 export default function CoachDetailPage() {
   const params = useParams()
@@ -34,6 +35,7 @@ export default function CoachDetailPage() {
   const [downloadingPDF, setDownloadingPDF] = useState(false)
   const [showEditarContratoModal, setShowEditarContratoModal] = useState(false)
   const [showChecklistModal, setShowChecklistModal] = useState(false)
+  const [showGestionDocumentosModal, setShowGestionDocumentosModal] = useState(false)
 
   useEffect(() => {
     if (isAuthorized && params.id) {
@@ -346,7 +348,19 @@ export default function CoachDetailPage() {
         </Card>
 
         {/* Documentos */}
-        <Card title="Documentos">
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold" style={{ color: '#FFFCF3' }}>Documentos</h3>
+            <button
+              onClick={() => setShowGestionDocumentosModal(true)}
+              className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+              style={{ background: '#AE3F21', color: '#FFFCF3' }}
+            >
+              <FileCheck size={18} />
+              Gestionar Documentos
+            </button>
+          </div>
+
           {documentos.length === 0 ? (
             <p className="text-center py-8" style={{ color: '#B39A72' }}>No hay documentos cargados</p>
           ) : (
@@ -489,6 +503,20 @@ export default function CoachDetailPage() {
           contratoActual={contratoVigente}
           onSuccess={() => {
             setShowEditarContratoModal(false)
+            cargarTodosLosDatos()
+          }}
+        />
+      )}
+
+      {/* Modal Gestión Documentos */}
+      {showGestionDocumentosModal && (
+        <GestionDocumentosModal
+          isOpen={showGestionDocumentosModal}
+          onClose={() => setShowGestionDocumentosModal(false)}
+          coach={coach}
+          documentos={documentos}
+          onSuccess={() => {
+            setShowGestionDocumentosModal(false)
             cargarTodosLosDatos()
           }}
         />
