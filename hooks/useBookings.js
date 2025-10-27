@@ -1,237 +1,130 @@
 'use client'
 
-import { useQuery, useMutation, useQueryClient } from '@tantml/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
-import { useUser } from './useUser'
 
-async function fetchBookings({ userId, classId, estado } = {}) {
-  let query = supabase
+// Fetch bookings del usuario
+async function fetchUserBookings(userId) {
+  const { data, error } = await supabase
     .from('bookings')
     .select(`
       *,
-      class:classes(
+      class:classes (
         *,
-        class_type:class_types(*),
-        room:rooms(*),
-        coach:coaches(
-          id,
-          profiles(nombre, apellidos)
-        )
-      ),
-      user:profiles(id, nombre, apellidos, email),
-      spot:spots(*),
-      user_credit:user_credits(*)
+        class_type:class_types (*),
+        coach:coaches (*)
+      )
     `)
+    .eq('user_id', userId)
     .order('created_at', { ascending: false })
 
-  if (userId) {
-    query = query.eq('user_id', userId)
-  }
-
-  if (classId) {
-    query = query.eq('class_id', classId)
-  }
-
-  if (estado) {
-    query = query.eq('estado', estado)
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    throw error
-  }
-
+  if (error) throw error
   return data || []
 }
 
-export function useBookings({ userId, classId, estado, enabled = true } = {}) {
-  const queryKey = ['bookings', { userId, classId, estado }]
-
+// Hook principal de bookings
+export function useUserBookings(userId) {
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey,
-    queryFn: () => fetchBookings({ userId, classId, estado }),
-    staleTime: 2 * 60 * 1000,
-    cacheTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: true,
-    enabled
+    queryKey: ['bookings', userId],
+    queryFn: () => fetchUserBookings(userId),
+    enabled: !!userId,
   })
 
   return {
     bookings: data || [],
     loading: isLoading,
     error,
-    refetch
+    refetch,
   }
 }
 
-export function useMyBookings({ estado } = {}) {
-  const { user } = useUser()
-  
-  return useBookings({
-    userId: user?.id,
-    estado,
-    enabled: !!user?.id
-  })
-}
-
-export function useMyUpcomingBookings() {
-  const { user } = useUser()
-  
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['my-upcoming-bookings', user?.id],
-    queryFn: async () => {
-      const today = new Date().toISOString().split('T')[0]
-      
-      const { data, error } = await supabase
-        .from('bookings')
-        .select(`
-          *,
-          class:classes!inner(
-            *,
-            class_type:class_types(*),
-            room:rooms(*),
-            coach:coaches(
-              id,
-              profiles(nombre, apellidos)
-            )
-          ),
-          spot:spots(*)
-        `)
-        .eq('user_id', user?.id)
-        .eq('estado', 'confirmada')
-        .gte('class.fecha', today)
-        .order('class(fecha)', { ascending: true })
-        .order('class(hora_inicio)', { ascending: true })
-
-      if (error) throw error
-      return data || []
-    },
-    staleTime: 2 * 60 * 1000,
-    cacheTime: 10 * 60 * 1000,
-    enabled: !!user?.id
-  })
-
-  return {
-    bookings: data || [],
-    loading: isLoading,
-    error,
-    refetch
-  }
-}
-
-export function useClassBookings(classId) {
-  return useBookings({
-    classId,
-    enabled: !!classId
-  })
-}
-
+// Crear booking usando función transaccional
 export function useCreateBooking() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (bookingData) => {
-      const { data, error } = await supabase
-        .from('bookings')
-        .insert([bookingData])
-        .select()
-        .single()
+    mutationFn: async ({ userId, classId, spotId }) => {
+      const { data, error } = await supabase.rpc('create_booking_transactional', {
+        p_user_id: userId,
+        p_class_id: classId,
+        p_spot_id: spotId,
+      })
 
       if (error) throw error
+      if (!data.success) throw new Error(data.message || data.error)
       return data
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['bookings'] })
-      queryClient.invalidateQueries({ queryKey: ['my-upcoming-bookings'] })
+      queryClient.invalidateQueries({ queryKey: ['bookings', variables.userId] })
       queryClient.invalidateQueries({ queryKey: ['classes'] })
-      queryClient.invalidateQueries({ queryKey: ['class', variables.class_id] })
-      queryClient.invalidateQueries({ queryKey: ['user-credits'] })
-    }
+      queryClient.invalidateQueries({ queryKey: ['class', variables.classId] })
+      queryClient.invalidateQueries({ queryKey: ['user-credits', variables.userId] })
+    },
   })
 }
 
+// Cancelar booking usando función transaccional
 export function useCancelBooking() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (bookingId) => {
-      const { data, error } = await supabase
-        .from('bookings')
-        .update({ 
-          estado: 'cancelada',
-          fecha_cancelacion: new Date().toISOString()
-        })
-        .eq('id', bookingId)
-        .select()
-        .single()
+    mutationFn: async ({ bookingId, userId, reason }) => {
+      const { data, error } = await supabase.rpc('cancel_booking_transactional', {
+        p_booking_id: bookingId,
+        p_user_id: userId,
+        p_reason: reason,
+      })
 
       if (error) throw error
+      if (!data.success) throw new Error(data.message || data.error)
       return data
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['bookings'] })
-      queryClient.invalidateQueries({ queryKey: ['my-upcoming-bookings'] })
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['bookings', variables.userId] })
       queryClient.invalidateQueries({ queryKey: ['classes'] })
-      queryClient.invalidateQueries({ queryKey: ['class', data.class_id] })
-      queryClient.invalidateQueries({ queryKey: ['user-credits'] })
-    }
+      queryClient.invalidateQueries({ queryKey: ['user-credits', variables.userId] })
+    },
   })
 }
 
+// Check-in usando función transaccional
 export function useCheckInBooking() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (bookingId) => {
-      const { data, error } = await supabase
-        .from('bookings')
-        .update({ 
-          check_in_at: new Date().toISOString()
-        })
-        .eq('id', bookingId)
-        .select()
-        .single()
+    mutationFn: async ({ bookingId, staffId }) => {
+      const { data, error } = await supabase.rpc('checkin_booking_transactional', {
+        p_booking_id: bookingId,
+        p_staff_id: staffId,
+      })
 
       if (error) throw error
+      if (!data.success) throw new Error(data.message || data.error)
       return data
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] })
-      queryClient.invalidateQueries({ queryKey: ['class', data.class_id] })
-    }
+    },
   })
 }
 
-export function useBookingById(bookingId) {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['booking', bookingId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select(`
-          *,
-          class:classes(*,
-            class_type:class_types(*),
-            room:rooms(*),
-            coach:coaches(id, profiles(nombre, apellidos))
-          ),
-          spot:spots(*),
-          user_credit:user_credits(*)
-        `)
-        .eq('id', bookingId)
-        .single()
+// Agregar a waitlist
+export function useAddToWaitlist() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ userId, classId }) => {
+      const { data, error } = await supabase.rpc('add_to_waitlist_transactional', {
+        p_user_id: userId,
+        p_class_id: classId,
+      })
 
       if (error) throw error
+      if (!data.success) throw new Error(data.message || data.error)
       return data
     },
-    staleTime: 3 * 60 * 1000,
-    enabled: !!bookingId
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['waitlist', variables.classId] })
+    },
   })
-
-  return {
-    booking: data,
-    loading: isLoading,
-    error
-  }
 }

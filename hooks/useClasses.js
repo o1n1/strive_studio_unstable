@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase/client'
+import { stableQueryOptions } from '@/lib/react-query-config'
 
 async function fetchClasses({ startDate, endDate, estado, coachId } = {}) {
   let query = supabase
@@ -10,28 +11,13 @@ async function fetchClasses({ startDate, endDate, estado, coachId } = {}) {
     .order('fecha', { ascending: true })
     .order('hora_inicio', { ascending: true })
 
-  if (startDate) {
-    query = query.gte('fecha', startDate)
-  }
-
-  if (endDate) {
-    query = query.lte('fecha', endDate)
-  }
-
-  if (estado) {
-    query = query.eq('estado', estado)
-  }
-
-  if (coachId) {
-    query = query.eq('coach_id', coachId)
-  }
+  if (startDate) query = query.gte('fecha', startDate)
+  if (endDate) query = query.lte('fecha', endDate)
+  if (estado) query = query.eq('estado', estado)
+  if (coachId) query = query.eq('coach_id', coachId)
 
   const { data, error } = await query
-
-  if (error) {
-    throw error
-  }
-
+  if (error) throw error
   return data || []
 }
 
@@ -41,18 +27,14 @@ export function useClasses({ startDate, endDate, estado, coachId, enabled = true
   const { data, isLoading, error, refetch } = useQuery({
     queryKey,
     queryFn: () => fetchClasses({ startDate, endDate, estado, coachId }),
-    staleTime: 3 * 60 * 1000,
-    cacheTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: true,
-    refetchOnMount: true,
-    enabled
+    enabled,
   })
 
   return {
     classes: data || [],
     loading: isLoading,
     error,
-    refetch
+    refetch,
   }
 }
 
@@ -69,15 +51,13 @@ export function useClassById(classId) {
       if (error) throw error
       return data
     },
-    staleTime: 5 * 60 * 1000,
-    cacheTime: 15 * 60 * 1000,
-    enabled: !!classId
+    enabled: !!classId,
   })
 
   return {
-    classData: data,
+    class: data,
     loading: isLoading,
-    error
+    error,
   }
 }
 
@@ -97,7 +77,7 @@ export function useCreateClass() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['classes'] })
-    }
+    },
   })
 }
 
@@ -105,11 +85,11 @@ export function useUpdateClass() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ classId, updates }) => {
+    mutationFn: async ({ id, updates }) => {
       const { data, error } = await supabase
         .from('classes')
         .update(updates)
-        .eq('id', classId)
+        .eq('id', id)
         .select()
         .single()
 
@@ -118,8 +98,8 @@ export function useUpdateClass() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['classes'] })
-      queryClient.invalidateQueries({ queryKey: ['class', variables.classId] })
-    }
+      queryClient.invalidateQueries({ queryKey: ['class', variables.id] })
+    },
   })
 }
 
@@ -137,29 +117,6 @@ export function useDeleteClass() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['classes'] })
-    }
-  })
-}
-
-export function useTodayClasses() {
-  const today = new Date().toISOString().split('T')[0]
-  
-  return useClasses({
-    startDate: today,
-    endDate: today,
-    estado: 'programada'
-  })
-}
-
-export function useUpcomingClasses(days = 7) {
-  const today = new Date().toISOString().split('T')[0]
-  const futureDate = new Date()
-  futureDate.setDate(futureDate.getDate() + days)
-  const endDate = futureDate.toISOString().split('T')[0]
-  
-  return useClasses({
-    startDate: today,
-    endDate: endDate,
-    estado: 'programada'
+    },
   })
 }
