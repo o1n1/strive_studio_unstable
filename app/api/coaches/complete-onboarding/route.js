@@ -1,16 +1,7 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 
-// Configuración para aumentar límite de body
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '50mb',
-    },
-  },
-}
-
-export const maxDuration = 60 // 60 segundos timeout
+export const maxDuration = 60
 
 export async function POST(request) {
   try {
@@ -19,10 +10,7 @@ export async function POST(request) {
     const body = await request.json()
     const { token, formData, invitacionId } = body
 
-    console.log('📋 [API] Validando token y datos...')
-
     if (!token || !formData || !invitacionId) {
-      console.error('❌ [API] Faltan datos requeridos')
       return NextResponse.json(
         { error: 'Token, formData e invitacionId son requeridos' },
         { status: 400 }
@@ -102,21 +90,18 @@ export async function POST(request) {
       console.error('❌ [API] Error actualizando perfil:', profileError)
     }
 
-    // 4. Crear registro de coach
+    // 4. Crear registro de coach (solo campos que existen)
     console.log('🏋️ [API] Creando registro de coach...')
     const { error: coachError } = await supabase
       .from('coaches')
       .insert({
         id: userId,
-        nombre: formData.nombre,
-        apellidos: formData.apellidos,
-        email: formData.email,
         telefono: formData.telefono,
         fecha_nacimiento: formData.fecha_nacimiento || null,
         direccion: formData.direccion || null,
         rfc: formData.rfc || null,
         bio: formData.bio || null,
-        años_experiencia: formData.años_experiencia || null,
+        años_experiencia: formData.años_experiencia ? parseInt(formData.años_experiencia) : null,
         especialidades: formData.especialidades || [],
         certificaciones: formData.certificaciones || [],
         instagram: formData.instagram || null,
@@ -129,8 +114,9 @@ export async function POST(request) {
           nombre: formData.contacto_emergencia_nombre || '',
           telefono: formData.contacto_emergencia_telefono || ''
         },
-        estado_onboarding: 'pendiente_aprobacion',
-        fecha_registro: new Date().toISOString()
+        estado: 'pendiente',
+        activo: false,
+        fecha_ingreso: new Date().toISOString().split('T')[0]
       })
 
     if (coachError) {
@@ -262,7 +248,7 @@ export async function POST(request) {
             contenidoTemplate = contenidoTemplate.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), reemplazos[key])
           })
           
-          console.log('✅ [API] Template personalizado con variables correctas')
+          console.log('✅ [API] Template personalizado')
         } else {
           console.warn('⚠️ [API] No se pudo obtener template, usando fallback')
           contenidoTemplate = getFallbackContent(formData, invitation)
@@ -307,7 +293,7 @@ export async function POST(request) {
           .from('documents')
           .getPublicUrl(pdfPath)
         pdfUrl = urlData.publicUrl
-        console.log('✅ [API] PDF generado y subido con firma embebida')
+        console.log('✅ [API] PDF generado y subido')
       }
     } catch (pdfError) {
       console.error('⚠️ [API] Error generando PDF:', pdfError)
@@ -353,7 +339,7 @@ Categoría: ${categoria}
 Tipo de compensación: Por Clase`
     }
 
-    // 8. Crear registro de contrato con template_id y firma
+    // 8. Crear registro de contrato
     console.log('📄 [API] Creando contrato firmado...')
     const { error: contratoError } = await supabase
       .from('coach_contracts')
@@ -374,7 +360,7 @@ Tipo de compensación: Por Clase`
     if (contratoError) {
       console.error('⚠️ [API] Error creando contrato:', contratoError)
     } else {
-      console.log('✅ [API] Contrato creado con template_id y firma embebida')
+      console.log('✅ [API] Contrato creado')
     }
 
     // 9. Marcar invitación como usada
