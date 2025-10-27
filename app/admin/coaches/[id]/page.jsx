@@ -135,7 +135,17 @@ export default function CoachDetailPage() {
       
       console.log('📄 Generando PDF para coach:', params.id)
       
-      const response = await fetch(`/api/coaches/${params.id}/contract/pdf`)
+      // Obtener sesión para el token
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        throw new Error('No hay sesión activa')
+      }
+      
+      const response = await fetch(`/api/coaches/${params.id}/contract/pdf`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
       
       if (!response.ok) {
         const error = await response.json()
