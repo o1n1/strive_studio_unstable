@@ -89,3 +89,31 @@ export function useCoachStats(coachId) {
     error,
   }
 }
+
+export function useCoachClasses(coachId, { startDate, endDate } = {}) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['coach-classes', coachId, { startDate, endDate }],
+    queryFn: async () => {
+      let query = supabase
+        .from('classes_full_info')
+        .select('*')
+        .eq('coach_id', coachId)
+        .order('fecha', { ascending: true })
+        .order('hora_inicio', { ascending: true })
+
+      if (startDate) query = query.gte('fecha', startDate)
+      if (endDate) query = query.lte('fecha', endDate)
+
+      const { data, error } = await query
+      if (error) throw error
+      return data || []
+    },
+    enabled: !!coachId,
+  })
+
+  return {
+    classes: data || [],
+    loading: isLoading,
+    error,
+  }
+}
