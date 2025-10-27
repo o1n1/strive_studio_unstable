@@ -147,8 +147,7 @@ export default function PlantillasContratosPage() {
           vigente: true,
           es_default: false,
           version: 1,
-          creado_por: session.user.id,
-          actualizado_por: session.user.id
+          creado_por: session.user.id
         }
 
         const { error } = await supabase
@@ -163,7 +162,6 @@ export default function PlantillasContratosPage() {
         const plantillaData = {
           nombre: formData.nombre.trim(),
           contenido: formData.contenido.trim(),
-          actualizado_por: session.user.id,
           updated_at: new Date().toISOString()
         }
 
@@ -284,153 +282,215 @@ export default function PlantillasContratosPage() {
           </button>
         </div>
 
-        {/* Info Variables */}
-        <Card>
-          <div className="flex items-start gap-3">
-            <AlertCircle size={20} style={{ color: '#AE3F21' }} />
-            <div>
-              <p className="text-sm font-semibold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-                Variables disponibles:
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {['{{nombre_completo}}', '{{fecha_inicio}}', '{{categoria}}', '{{fecha_firma}}'].map(v => (
-                  <code key={v} className="text-xs px-2 py-1 rounded" 
-                    style={{ background: 'rgba(174, 63, 33, 0.2)', color: '#AE3F21' }}>
-                    {v}
-                  </code>
-                ))}
-              </div>
-            </div>
-          </div>
-        </Card>
-
         {/* Tabs */}
         <div className="flex gap-2">
-          {['coaches', 'staff'].map(tab => (
-            <button
-              key={tab}
-              onClick={() => setTabActivo(tab)}
-              className="px-6 py-3 rounded-lg font-semibold transition-all"
-              style={{
-                background: tabActivo === tab ? '#AE3F21' : 'rgba(156, 122, 94, 0.2)',
-                color: tabActivo === tab ? '#FFFCF3' : '#B39A72',
-                fontFamily: 'Montserrat, sans-serif'
-              }}
-            >
-              {tab === 'coaches' ? 'Coaches' : 'Staff'}
-            </button>
-          ))}
+          <button
+            onClick={() => setTabActivo('coaches')}
+            className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+              tabActivo === 'coaches' 
+                ? 'opacity-100' 
+                : 'opacity-50 hover:opacity-75'
+            }`}
+            style={{ 
+              background: tabActivo === 'coaches' ? '#AE3F21' : 'rgba(174, 63, 33, 0.3)',
+              color: '#FFFCF3', 
+              fontFamily: 'Montserrat, sans-serif' 
+            }}
+          >
+            Coaches
+          </button>
+          <button
+            onClick={() => setTabActivo('staff')}
+            className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+              tabActivo === 'staff' 
+                ? 'opacity-100' 
+                : 'opacity-50 hover:opacity-75'
+            }`}
+            style={{ 
+              background: tabActivo === 'staff' ? '#AE3F21' : 'rgba(174, 63, 33, 0.3)',
+              color: '#FFFCF3', 
+              fontFamily: 'Montserrat, sans-serif' 
+            }}
+          >
+            Staff
+          </button>
         </div>
 
         {/* Plantilla Activa */}
-        {plantillaActiva && !editando && (
+        {plantillaActiva && (
           <Card>
-            <div className="flex items-start gap-4">
-              <div className="p-3 rounded-lg" style={{ background: 'rgba(16, 185, 129, 0.1)' }}>
-                <Check size={24} style={{ color: '#10b981' }} />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <h3 className="text-xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-lg" style={{ background: 'rgba(34, 197, 94, 0.2)' }}>
+                  <Check size={24} style={{ color: '#22c55e' }} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
                     {plantillaActiva.nombre}
-                  </h3>
-                  <span className="px-3 py-1 rounded-full text-xs font-semibold"
-                    style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' }}>
-                    ACTIVO
-                  </span>
+                  </h2>
+                  <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                    Plantilla activa • Versión {plantillaActiva.version}
+                  </p>
                 </div>
-                <p className="text-sm mb-4" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Esta es la plantilla que se usa actualmente en el onboarding
-                </p>
-                <div className="p-4 rounded-lg mb-4 max-h-60 overflow-y-auto"
-                  style={{ background: 'rgba(42, 42, 42, 0.6)', border: '1px solid rgba(156, 122, 94, 0.2)' }}>
-                  <pre className="text-xs whitespace-pre-wrap" style={{ color: '#B39A72', fontFamily: 'monospace' }}>
-                    {plantillaActiva.contenido}
-                  </pre>
+              </div>
+              <button
+                onClick={() => editarPlantilla(plantillaActiva)}
+                className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+                style={{ background: 'rgba(179, 154, 114, 0.2)', color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}
+              >
+                <Edit2 size={16} />
+                Editar
+              </button>
+            </div>
+
+            {editando === plantillaActiva.id ? (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                    Nombre de la plantilla
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.nombre}
+                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                    className="w-full px-4 py-2 rounded-lg outline-none"
+                    style={{ 
+                      background: 'rgba(179, 154, 114, 0.1)', 
+                      color: '#FFFCF3',
+                      border: '1px solid rgba(179, 154, 114, 0.3)',
+                      fontFamily: 'Montserrat, sans-serif'
+                    }}
+                    placeholder="Ej: Contrato Coach Por Clase 2025"
+                  />
                 </div>
-                <div className="flex gap-2">
+
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                    Contenido del contrato
+                  </label>
+                  <textarea
+                    value={formData.contenido}
+                    onChange={(e) => setFormData({ ...formData, contenido: e.target.value })}
+                    rows={12}
+                    className="w-full px-4 py-2 rounded-lg outline-none resize-none"
+                    style={{ 
+                      background: 'rgba(179, 154, 114, 0.1)', 
+                      color: '#FFFCF3',
+                      border: '1px solid rgba(179, 154, 114, 0.3)',
+                      fontFamily: 'Montserrat, sans-serif'
+                    }}
+                    placeholder="Escribe el contenido del contrato..."
+                  />
+                  <p className="text-xs mt-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                    Variables disponibles: {'{nombre}'}, {'{apellidos}'}, {'{fecha_inicio}'}, {'{tipo_contrato}'}
+                  </p>
+                </div>
+
+                <div className="flex gap-3">
                   <button
-                    onClick={() => editarPlantilla(plantillaActiva)}
-                    className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
-                    style={{ background: 'rgba(174, 63, 33, 0.2)', color: '#AE3F21', fontFamily: 'Montserrat, sans-serif' }}
+                    onClick={guardar}
+                    disabled={saving}
+                    className="px-6 py-3 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+                    style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}
                   >
-                    <Edit2 size={16} />
-                    Editar
+                    {saving ? 'Guardando...' : 'Guardar Cambios'}
+                  </button>
+                  <button
+                    onClick={cancelar}
+                    disabled={saving}
+                    className="px-6 py-3 rounded-lg font-semibold transition-all hover:opacity-80"
+                    style={{ background: 'rgba(179, 154, 114, 0.2)', color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}
+                  >
+                    Cancelar
                   </button>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div 
+                className="p-4 rounded-lg overflow-auto max-h-64"
+                style={{ 
+                  background: 'rgba(179, 154, 114, 0.1)',
+                  color: '#FFFCF3',
+                  fontFamily: 'Montserrat, sans-serif',
+                  whiteSpace: 'pre-wrap'
+                }}
+              >
+                {plantillaActiva.contenido}
+              </div>
+            )}
           </Card>
         )}
 
-        {/* Formulario de Edición */}
-        {editando && (
+        {/* Nueva Plantilla */}
+        {editando === 'nueva' && (
           <Card>
-            <h3 className="text-xl font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              {editando === 'nueva' ? 'Nueva Plantilla' : 'Editar Plantilla'}
-            </h3>
-            
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 rounded-lg" style={{ background: 'rgba(174, 63, 33, 0.2)' }}>
+                <Plus size={24} style={{ color: '#AE3F21' }} />
+              </div>
+              <h2 className="text-xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                Nueva Plantilla
+              </h2>
+            </div>
+
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold mb-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Nombre de la Plantilla
+                <label className="block text-sm font-medium mb-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Nombre de la plantilla
                 </label>
                 <input
                   type="text"
                   value={formData.nombre}
                   onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                  placeholder="Ej: Contrato Coach Estándar v2"
-                  className="w-full p-3 rounded-lg"
-                  style={{
-                    background: 'rgba(42, 42, 42, 0.6)',
-                    border: '1px solid rgba(156, 122, 94, 0.3)',
+                  className="w-full px-4 py-2 rounded-lg outline-none"
+                  style={{ 
+                    background: 'rgba(179, 154, 114, 0.1)', 
                     color: '#FFFCF3',
+                    border: '1px solid rgba(179, 154, 114, 0.3)',
                     fontFamily: 'Montserrat, sans-serif'
                   }}
+                  placeholder="Ej: Contrato Coach Por Clase 2025"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                  Contenido del Contrato
+                <label className="block text-sm font-medium mb-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Contenido del contrato
                 </label>
                 <textarea
                   value={formData.contenido}
                   onChange={(e) => setFormData({ ...formData, contenido: e.target.value })}
-                  placeholder="Escribe el contenido del contrato aquí..."
-                  rows={20}
-                  className="w-full p-3 rounded-lg font-mono text-sm"
-                  style={{
-                    background: 'rgba(42, 42, 42, 0.6)',
-                    border: '1px solid rgba(156, 122, 94, 0.3)',
-                    color: '#FFFCF3'
+                  rows={12}
+                  className="w-full px-4 py-2 rounded-lg outline-none resize-none"
+                  style={{ 
+                    background: 'rgba(179, 154, 114, 0.1)', 
+                    color: '#FFFCF3',
+                    border: '1px solid rgba(179, 154, 114, 0.3)',
+                    fontFamily: 'Montserrat, sans-serif'
                   }}
+                  placeholder="Escribe el contenido del contrato..."
                 />
+                <p className="text-xs mt-2" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                  Variables disponibles: {'{nombre}'}, {'{apellidos}'}, {'{fecha_inicio}'}, {'{tipo_contrato}'}
+                </p>
               </div>
 
               <div className="flex gap-3">
                 <button
-                  onClick={cancelar}
-                  className="flex-1 py-3 rounded-lg font-semibold transition-all hover:opacity-80"
-                  style={{
-                    background: 'rgba(156, 122, 94, 0.2)',
-                    color: '#B39A72',
-                    fontFamily: 'Montserrat, sans-serif'
-                  }}
-                >
-                  Cancelar
-                </button>
-                <button
                   onClick={guardar}
                   disabled={saving}
-                  className="flex-1 py-3 rounded-lg font-semibold transition-all hover:opacity-80 disabled:opacity-50"
-                  style={{
-                    background: '#AE3F21',
-                    color: '#FFFCF3',
-                    fontFamily: 'Montserrat, sans-serif'
-                  }}
+                  className="px-6 py-3 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+                  style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}
                 >
-                  {saving ? 'Guardando...' : 'Guardar Plantilla'}
+                  {saving ? 'Guardando...' : 'Crear Plantilla'}
+                </button>
+                <button
+                  onClick={cancelar}
+                  disabled={saving}
+                  className="px-6 py-3 rounded-lg font-semibold transition-all hover:opacity-80"
+                  style={{ background: 'rgba(179, 154, 114, 0.2)', color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}
+                >
+                  Cancelar
                 </button>
               </div>
             </div>
@@ -438,43 +498,53 @@ export default function PlantillasContratosPage() {
         )}
 
         {/* Historial */}
-        {!editando && historial.length > 0 && (
+        {historial.length > 0 && (
           <Card>
-            <h3 className="text-lg font-bold mb-4" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
-              <Clock size={20} className="inline mr-2" />
-              Historial de Versiones ({historial.length})
-            </h3>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 rounded-lg" style={{ background: 'rgba(179, 154, 114, 0.2)' }}>
+                <Clock size={24} style={{ color: '#B39A72' }} />
+              </div>
+              <h2 className="text-xl font-bold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                Historial de Plantillas
+              </h2>
+            </div>
+
             <div className="space-y-3">
-              {historial.map(plantilla => (
-                <div key={plantilla.id} className="p-4 rounded-lg flex items-center justify-between"
-                  style={{ background: 'rgba(42, 42, 42, 0.4)', border: '1px solid rgba(156, 122, 94, 0.2)' }}>
+              {historial.map((plantilla) => (
+                <div
+                  key={plantilla.id}
+                  className="p-4 rounded-lg flex items-center justify-between"
+                  style={{ background: 'rgba(179, 154, 114, 0.1)', border: '1px solid rgba(179, 154, 114, 0.2)' }}
+                >
                   <div className="flex-1">
-                    <p className="font-semibold mb-1" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
+                    <h3 className="font-semibold" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
                       {plantilla.nombre}
-                    </p>
-                    <p className="text-xs" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                      Creada: {new Date(plantilla.created_at).toLocaleDateString('es-MX')}
+                    </h3>
+                    <p className="text-sm" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
+                      Versión {plantilla.version} • Creada {new Date(plantilla.created_at).toLocaleDateString()}
                     </p>
                   </div>
+
                   <div className="flex gap-2">
                     <button
                       onClick={() => activarPlantilla(plantilla.id)}
-                      className="px-3 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-80"
-                      style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontFamily: 'Montserrat, sans-serif' }}
+                      className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80 flex items-center gap-2"
+                      style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#22c55e', fontFamily: 'Montserrat, sans-serif' }}
                     >
+                      <Check size={16} />
                       Activar
                     </button>
                     <button
                       onClick={() => editarPlantilla(plantilla)}
-                      className="px-3 py-2 rounded-lg text-sm transition-all hover:opacity-80"
-                      style={{ background: 'rgba(174, 63, 33, 0.2)', color: '#AE3F21' }}
+                      className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80"
+                      style={{ background: 'rgba(179, 154, 114, 0.2)', color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}
                     >
                       <Edit2 size={16} />
                     </button>
                     <button
                       onClick={() => eliminarPlantilla(plantilla.id, plantilla.nombre)}
-                      className="px-3 py-2 rounded-lg text-sm transition-all hover:opacity-80"
-                      style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}
+                      className="px-4 py-2 rounded-lg font-semibold transition-all hover:opacity-80"
+                      style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', fontFamily: 'Montserrat, sans-serif' }}
                     >
                       <Trash2 size={16} />
                     </button>
@@ -486,15 +556,17 @@ export default function PlantillasContratosPage() {
         )}
 
         {/* Empty State */}
-        {!plantillaActiva && !editando && historial.length === 0 && (
+        {!plantillaActiva && historial.length === 0 && (
           <Card>
             <div className="text-center py-12">
-              <FileText size={48} className="mx-auto mb-4" style={{ color: '#B39A72' }} />
+              <div className="inline-flex p-4 rounded-full mb-4" style={{ background: 'rgba(179, 154, 114, 0.2)' }}>
+                <FileText size={48} style={{ color: '#B39A72' }} />
+              </div>
               <h3 className="text-xl font-bold mb-2" style={{ color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}>
                 No hay plantillas de {tabActivo === 'coaches' ? 'coaches' : 'staff'}
               </h3>
               <p className="mb-6" style={{ color: '#B39A72', fontFamily: 'Montserrat, sans-serif' }}>
-                Crea la primera plantilla para comenzar
+                Crea tu primera plantilla para empezar a usarla en el onboarding
               </p>
               <button
                 onClick={nuevaPlantilla}
@@ -502,7 +574,7 @@ export default function PlantillasContratosPage() {
                 style={{ background: '#AE3F21', color: '#FFFCF3', fontFamily: 'Montserrat, sans-serif' }}
               >
                 <Plus size={20} />
-                Crear Plantilla
+                Crear Primera Plantilla
               </button>
             </div>
           </Card>
