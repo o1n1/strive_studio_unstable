@@ -9,6 +9,7 @@ export default function Step8FirmaContrato({ data, updateData, prevStep, invitac
   const [loadingPlantilla, setLoadingPlantilla] = useState(true)
   const [isSigning, setIsSigning] = useState(false)
   const [contratoTexto, setContratoTexto] = useState('')
+  const [templateId, setTemplateId] = useState(null)
   const canvasRef = useRef(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [hasSignature, setHasSignature] = useState(false)
@@ -47,27 +48,29 @@ export default function Step8FirmaContrato({ data, updateData, prevStep, invitac
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       )
 
-      // Obtener plantilla por defecto para "por_clase"
-      const { data: plantilla, error } = await supabase
+      // Obtener template activo tipo 'coach'
+      const { data: template, error } = await supabase
         .from('contract_templates')
-        .select('contenido')
-        .eq('tipo_contrato', 'por_clase')
-        .eq('es_default', true)
-        .eq('vigente', true)
+        .select('id, contenido')
+        .eq('tipo', 'coach')
+        .eq('activo', true)
         .single()
 
-      if (error || !plantilla) {
-        console.error('Error cargando plantilla:', error)
-        // Fallback: usar texto básico si no hay plantilla
+      if (error || !template) {
+        console.error('Error cargando template:', error)
+        // Fallback: usar texto básico si no hay template
         setContratoTexto(getContratoFallback())
+        setTemplateId(null)
       } else {
-        // Reemplazar variables en la plantilla
-        const textoPersonalizado = reemplazarVariables(plantilla.contenido)
+        // Guardar template_id y personalizar contenido
+        setTemplateId(template.id)
+        const textoPersonalizado = reemplazarVariables(template.contenido)
         setContratoTexto(textoPersonalizado)
       }
     } catch (error) {
       console.error('Error:', error)
       setContratoTexto(getContratoFallback())
+      setTemplateId(null)
     } finally {
       setLoadingPlantilla(false)
     }
@@ -233,13 +236,16 @@ Tipo de compensación: Por Clase`
     setLoading(true)
 
     try {
-      // Aquí se guardará todo en la BD
+      // Enviar formData con template_id
       const response = await fetch('/api/coaches/complete-onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token,
-          formData: data,
+          formData: {
+            ...data,
+            template_id: templateId // Enviar template_id al API
+          },
           invitacionId: invitacion.id
         })
       })

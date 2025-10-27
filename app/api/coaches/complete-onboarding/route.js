@@ -10,6 +10,7 @@ export async function POST(request) {
 
     console.log('🔍 [API] Token:', token)
     console.log('🔍 [API] Email:', formData?.email)
+    console.log('🔍 [API] Template ID recibido:', formData?.template_id)
 
     if (!formData || !formData.email) {
       return NextResponse.json(
@@ -91,57 +92,56 @@ export async function POST(request) {
         }
 
         const fileExt = fileName.split('.').pop()
-        // ✅ CORRECCIÓN: Ruta correcta coaches/userId/archivo.jpg
-        const filePath = `${folder ? folder + '/' : ''}${userId}/${Date.now()}.${fileExt}`
+        const filePath = `${folder}/${userId}/${Date.now()}_${fileName}`
 
-        console.log(`📤 Subiendo a bucket: ${bucketName}, ruta: ${filePath}`)
-
-        const { data, error } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from(bucketName)
-          .upload(filePath, fileToUpload)
+          .upload(filePath, fileToUpload, {
+            contentType: fileToUpload.type || 'application/octet-stream',
+            upsert: false
+          })
 
-        if (error) {
-          console.error(`❌ Error subiendo a ${bucketName}:`, error)
-          throw error
+        if (uploadError) {
+          console.error('⚠️ [API] Error subiendo archivo:', uploadError)
+          return null
         }
 
         const { data: urlData } = supabase.storage
           .from(bucketName)
           .getPublicUrl(filePath)
 
-        console.log(`✅ Archivo subido: ${urlData.publicUrl}`)
         return urlData.publicUrl
-
       } catch (error) {
-        console.error('❌ Error uploading file:', error)
+        console.error('⚠️ [API] Error en uploadFile:', error)
         return null
       }
     }
 
-    // SUBIR FOTO DE PERFIL al bucket 'avatars'
+    // Subir foto de perfil
     if (formData.foto_perfil) {
-      console.log('📸 Subiendo foto de perfil a bucket avatars...')
+      console.log('📸 [API] Subiendo foto de perfil...')
       uploadedFiles.foto_perfil = await uploadFile(
         formData.foto_perfil,
         'avatars',
-        null, // Sin subcarpeta, directo en userId/
+        'coaches',
         'profile.jpg'
       )
+      console.log('✅ [API] Foto de perfil subida')
     }
 
-    // SUBIR DOCUMENTOS al bucket 'documents'
+    // Subir documentos
     if (formData.ine_frente) {
-      console.log('📄 Subiendo INE frente...')
+      console.log('📄 [API] Subiendo INE frente...')
       uploadedFiles.ine_frente = await uploadFile(
         formData.ine_frente,
         'documents',
-        'coaches', // ✅ Carpeta coaches primero
+        'coaches',
         'ine_frente.jpg'
       )
     }
 
     if (formData.ine_reverso) {
-      console.log('📄 Subiendo INE reverso...')
+      console.log('📄 [API] Subiendo INE reverso...')
       uploadedFiles.ine_reverso = await uploadFile(
         formData.ine_reverso,
         'documents',
@@ -151,45 +151,42 @@ export async function POST(request) {
     }
 
     if (formData.comprobante_domicilio) {
-      console.log('📄 Subiendo comprobante...')
+      console.log('📄 [API] Subiendo comprobante de domicilio...')
       uploadedFiles.comprobante_domicilio = await uploadFile(
         formData.comprobante_domicilio,
         'documents',
         'coaches',
-        'comprobante.pdf'
+        'comprobante_domicilio.pdf'
       )
     }
 
-    console.log('✅ [API] Archivos subidos:', Object.keys(uploadedFiles))
+    console.log('✅ [API] Archivos subidos')
 
-    // 4. Crear perfil (CON avatar en profiles.avatar_url)
-    console.log('👤 [API] Creando perfil...')
+    // 4. Crear profile
+    console.log('👤 [API] Creando profile...')
     const { error: profileError } = await supabase
       .from('profiles')
-      .upsert({
+      .insert({
         id: userId,
-        email: formData.email,
         nombre: formData.nombre,
         apellidos: formData.apellidos,
+        email: formData.email,
         telefono: formData.telefono,
-        avatar_url: uploadedFiles.foto_perfil || null,  // ✅ ÚNICA fuente de verdad
         rol: 'coach',
-        activo: true
-      }, {
-        onConflict: 'id'
+        avatar_url: uploadedFiles.foto_perfil || null
       })
 
     if (profileError) {
-      console.error('❌ [API] Error creando perfil:', profileError)
+      console.error('❌ [API] Error creando profile:', profileError)
       return NextResponse.json(
         { error: 'Error al crear perfil: ' + profileError.message },
         { status: 500 }
       )
     }
 
-    console.log('✅ [API] Perfil creado')
+    console.log('✅ [API] Profile creado')
 
-    // 5. Crear coach (SIN foto_profesional_url, se usa avatar_url de profiles)
+    // 5. Crear coach
     console.log('💪 [API] Creando coach...')
     const { error: coachError } = await supabase
       .from('coaches')
@@ -317,10 +314,8 @@ export async function POST(request) {
     let pdfUrl = null
     
     try {
-      // Importar generador dinámicamente (solo en servidor)
       const { generateCoachContractPDF } = await import('@/lib/pdf/contractGenerator')
       
-      // Datos temporales del contrato para generar PDF
       const contratoTemp = {
         id: crypto.randomUUID(),
         tipo_contrato: 'por_clase',
@@ -340,7 +335,6 @@ export async function POST(request) {
         firmaDigital: formData.firma_digital
       })
 
-      // Subir PDF a storage
       const pdfPath = `contracts/${userId}/${Date.now()}_contrato_v1.pdf`
       const { error: uploadError } = await supabase.storage
         .from('documents')
@@ -362,18 +356,19 @@ export async function POST(request) {
       console.error('⚠️ [API] Error generando PDF:', pdfError)
     }
 
-    // 9. Crear registro de contrato con PDF
+    // 9. Crear registro de contrato con template_id y firma_embebida
     console.log('📄 [API] Creando contrato firmado...')
     const { error: contratoError } = await supabase
       .from('coach_contracts')
       .insert({
         coach_id: userId,
+        template_id: formData.template_id || null,
         tipo_contrato: 'por_clase',
         fecha_inicio: new Date().toISOString().split('T')[0],
         estado: 'activo',
         firmado: true,
         fecha_firma: new Date().toISOString(),
-        firma_digital: formData.firma_digital,
+        firma_embebida: formData.firma_digital, // Firma en base64 PNG
         vigente: true,
         version: 1,
         documento_url: pdfUrl
@@ -382,10 +377,10 @@ export async function POST(request) {
     if (contratoError) {
       console.error('⚠️ [API] Error creando contrato:', contratoError)
     } else {
-      console.log('✅ [API] Contrato creado con PDF')
+      console.log('✅ [API] Contrato creado con template_id y firma embebida')
     }
 
-    // 9. Marcar invitación como usada
+    // 10. Marcar invitación como usada
     console.log('✅ [API] Marcando invitación como usada...')
     await supabase
       .from('coach_invitations')
